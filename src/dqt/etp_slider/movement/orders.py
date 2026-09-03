@@ -372,6 +372,7 @@ def load_analysis_orders(
 
 __all__ = [
     "ANALYSIS_ORDERS_SQL",
+    "CLHP_ABS_DELTA_MIN",
     "DEFAULT_SHIP_END",
     "DEFAULT_SHIP_START",
     "PRICE_SERIES",
@@ -383,7 +384,6 @@ __all__ = [
     "enrich_shifts",
     "load_analysis_orders",
     "normalize_movement_category",
-    "CLHP_ABS_DELTA_MIN",
     "refresh_movement_derived_flags",
     "shift_by_segment",
     "shift_summary",

@@ -1013,7 +1013,7 @@ def build_duckdb_catalog(
                 f"SELECT * FROM read_parquet('{hl_decomp}')"
             )
 
-        build_feature_impact, impact_paths, read_feature_impact = _require_impact()
+        _build_feature_impact, impact_paths, _read_feature_impact = _require_impact()
         impact = impact_paths(paths.read_mart)
         impact_view_map = {
             "impact_betas_by_prebook_day": impact["betas"],
@@ -1041,7 +1041,7 @@ def build_duckdb_catalog(
                 """
             )
 
-        build_funnel_attrs, funnel_paths, read_funnel = _require_funnel()
+        _build_funnel_attrs, funnel_paths, _read_funnel = _require_funnel()
         funnel = funnel_paths(paths.read_mart)
         funnel_view_map = {
             "funnel_load_attrs": funnel["load_attrs"],

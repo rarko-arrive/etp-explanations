@@ -1700,14 +1700,13 @@ def build_drift_report(
 
     hist = pl.read_parquet(hist_path)
     feat_df: pl.DataFrame | None = None
-    if tail is not None and not tail.is_empty():
-        if feat_path is not None:
-            embedded_ids = (
-                tail.sort("etp50_shift_pct", descending=True)
-                .head(max_explorer_loads)["loadnumber"]
-                .to_list()
-            )
-            feat_df = load_feature_snapshots(feat_path, embedded_ids)
+    if tail is not None and not tail.is_empty() and feat_path is not None:
+        embedded_ids = (
+            tail.sort("etp50_shift_pct", descending=True)
+            .head(max_explorer_loads)["loadnumber"]
+            .to_list()
+        )
+        feat_df = load_feature_snapshots(feat_path, embedded_ids)
     if mde_timeline_cache is None and avail_start is not None and avail_end is not None:
         mde_timeline_cache = hist_path.parent / f"explorer-mde-timeline-{avail_start}_{avail_end}.parquet"
     payload = build_report_payload(

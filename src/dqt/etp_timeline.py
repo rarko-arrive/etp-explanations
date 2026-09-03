@@ -10,7 +10,15 @@ import polars as pl
 
 from dqt.etp_mart import consecutive_feature_deltas
 from dqt.score.constants import COST_COL, ID_COL
-from dqt.viz import C_ETP, C_LIGHTNING, C_OTHER, DEEMPH, apply_style, escape_mpl_text, titles
+from dqt.viz import (
+    C_ETP,
+    C_LIGHTNING,
+    C_OTHER,
+    DEEMPH,
+    apply_style,
+    escape_mpl_text,
+    titles,
+)
 
 REALIZED_COST_COLOR = "#34495e"
 
@@ -883,7 +891,7 @@ __all__ = [
     "MARK_HRS",
     "MARK_LABELS",
     "REALIZED_COST_COLOR",
+    "_resolve_realized_cost",
     "build_load_timeline",
     "plot_etp_timeline",
-    "_resolve_realized_cost",
 ]

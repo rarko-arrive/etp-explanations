@@ -100,7 +100,10 @@ def build_labeled_cohort(
         ):
             if col in labeled.columns:
                 labeled = labeled.with_columns(pl.col(col).fill_null(0).cast(pl.Int8))
-        from dqt.etp_slider.drift.report import load_feature_snapshots, resolve_feature_snapshots_path
+        from dqt.etp_slider.drift.report import (
+            load_feature_snapshots,
+            resolve_feature_snapshots_path,
+        )
         from dqt.etp_slider.movement.feature_path import apply_feature_path_upgrades
 
         feat_path = resolve_feature_snapshots_path(Path(davis_path).parent)
