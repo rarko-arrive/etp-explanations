@@ -1,0 +1,32 @@
+[project]
+name = "etp-explanations"
+version = "0.1.0"
+description = "ETP shipment lifecycle explanations — material change ledger and HC outlier cohort"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "arriveds[azure]",
+    "ipykernel>=7.3.0",
+    "matplotlib>=3.8.0",
+    "python-dotenv>=1.0.0",
+    "tqdm>=4.70.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dqt", "scripts"]
+
+[tool.uv.sources]
+arriveds = { git = "ssh://git@github.com/rarko-arrive/arrive-ds.git", rev = "v0.3.2" }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.2",
+]
+
+[tool.ruff.lint]
+ignore = ["C408", "RUF046"]

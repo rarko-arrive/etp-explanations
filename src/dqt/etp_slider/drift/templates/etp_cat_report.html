@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --ink:#1a2332; --paper:#f6f7f9; --card:#ffffff; --line:#e3e7ee;
+  --amber:#e8a33d; --blue:#3b6fb5; --teal:#3d8f83; --plum:#8a5d9e;
+  --up:#c05b3c; --muted:#6b7686;
+  --mono:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:32px 20px 60px}
+.wrap{max-width:960px;margin:0 auto}
+header{border-bottom:3px solid var(--ink);padding-bottom:18px;margin-bottom:26px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:27px;font-weight:750;letter-spacing:-.01em;margin:4px 0 14px}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:8px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:22px 0 30px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.kpi .v{font-family:var(--mono);font-size:22px;font-weight:700}
+.kpi .l{font-size:12px;color:var(--muted);margin-top:2px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin-bottom:22px}
+h2{font-size:17px;font-weight:700;margin-bottom:2px}
+h3{font-size:15px;font-weight:700;margin:18px 0 6px;color:var(--ink)}
+.note{font-size:13px;color:var(--muted);margin-bottom:14px}
+.category-grid{display:grid;grid-template-columns:minmax(240px,1fr) minmax(260px,1.1fr);gap:20px;align-items:center}
+.chartbox{position:relative;height:300px;max-width:360px;margin:0 auto}
+.category-table-wrap table{font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:right;padding:7px 10px;border-bottom:2px solid var(--ink)}
+th:first-child,td:first-child{text-align:left}
+td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.cat-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px;vertical-align:middle}
+.detail-wrap{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+.detail-wrap:first-of-type{margin-top:0;padding-top:0;border-top:none}
+.volatility-grid{display:grid;grid-template-columns:minmax(220px,1fr) minmax(280px,1.2fr);gap:20px;align-items:start;margin-bottom:18px}
+.volatility-by-cat{margin-top:8px}
+.volatility-by-cat h4{font-size:13px;margin:0 0 8px;color:var(--ink)}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:10px;background:#eef1f6;color:var(--muted)}
+footer{font-size:12px;color:var(--muted);margin-top:8px}
+.funnel{margin:6px 0 2px}
+.funnel-row{display:grid;grid-template-columns:minmax(160px,220px) 1fr minmax(72px,88px);gap:10px 14px;align-items:center;margin-bottom:11px}
+.funnel-label{font-size:13px;font-weight:600;line-height:1.25}
+.funnel-note{font-size:11px;color:var(--muted);font-weight:400;margin-top:2px}
+.funnel-track{height:30px;background:#eef1f6;border-radius:5px;overflow:hidden}
+.funnel-bar{height:100%;border-radius:5px;min-width:3px}
+.funnel-bar.est{background:transparent;border:1px dashed var(--muted)}
+.funnel-count{font-family:var(--mono);font-size:13px;font-weight:700;text-align:right}
+.funnel-pct{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right}
+.funnel-bands{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.funnel-band{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.funnel-band .v{font-family:var(--mono);font-size:16px;font-weight:700}
+.funnel-band .l{font-size:11px;color:var(--muted);margin-top:2px}
+@media(max-width:720px){.category-grid,.volatility-grid{grid-template-columns:1fr}.funnel-row{grid-template-columns:1fr;gap:4px}.funnel-count,.funnel-pct{text-align:left}}
+</style>
+</head>
+<body><div class="wrap">
+<header>
+  <div class="eyebrow">ETP Slider · Leadtime Analysis</div>
+  <h1>__TITLE__</h1>
+  <p class="subtitle"><strong>Cohort:</strong> __COHORT_RULE__</p>
+  <p class="subtitle"><strong>Problem-load gate:</strong> __PROBLEM_RULE__</p>
+</header>
+
+<section id="funnelSection" style="display:none">
+  <h2>Cohort funnel</h2>
+  <p class="note" id="funnelNote"></p>
+  <div class="funnel" id="funnelViz"></div>
+  <div class="funnel-bands" id="funnelBands"></div>
+</section>
+
+<div class="kpis" id="kpis"></div>
+
+<section id="volatilitySection" style="display:none">
+  <h2>Cohort volatility</h2>
+  <p class="note" id="volatilityNote"></p>
+  <div class="volatility-grid">
+    <div class="chartbox"><canvas id="volatilityDonut"></canvas></div>
+    <div id="volatilityTable" class="category-table-wrap"></div>
+  </div>
+  <div id="volatilityByCategory"></div>
+</section>
+
+<section id="categorySection">
+  <h2>Volatile loads by movement category</h2>
+  <div class="note" id="categoryNote"></div>
+  <div class="category-grid">
+    <div class="chartbox"><canvas id="categoryDonut"></canvas></div>
+    <div id="categoryTable" class="category-table-wrap"></div>
+  </div>
+</section>
+
+<section id="segmentSection">
+  <h2>By movement category × segment</h2>
+  <p class="note">Parent / problem / stable comparison for each collapsed category. <strong>% of label ≥10%</strong> = share of that label's loads exceeding the problem threshold.</p>
+  <div id="segmentPivot"></div>
+</section>
+
+<section id="detailSection">
+  <h2>Category detail</h2>
+  <p class="note">Sub-breakdowns within each collapsed movement type (problem loads unless noted).</p>
+  <div id="categoryDetails"></div>
+</section>
+
+<footer id="footer"></footer>
+</div>
+<script>
+const D = __DATA_JSON__;
+const M = D.meta || {};
+const COLORS = M.attribution_colors || M.collapsed_colors || {LoadFeatures:'#e8a33d',LeadTimeClockOnly:'#3d8f83',LeadTimeIndexCooccur:'#5ba4c9',Random:'#3b6fb5'};
+const fmtAmt = v => v == null ? '—' : `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`;
+const fmtPct = v => v == null ? '—' : `${(v*100).toFixed(1)}%`;
+const fmtShare = v => v == null ? '—' : `${(v*100).toFixed(1)}%`;
+const VCOLORS = M.volatility_colors || {all:'#1a2332',volatile:'#c05b3c',stable:'#3b6fb5'};
+const FUNNEL_COLORS = {
+  company:'#b8c0cc',mart:'#1a2332',report:'#3b6fb5',problem:'#c05b3c',
+  lc_high_confidence:'#3d8f83',lc_index_cooccur:'#5ba4c9',lc_problem:'#3d8f83',
+};
+
+function renderCohortFunnel() {
+  const f = D.cohort_funnel;
+  const sec = document.getElementById('funnelSection');
+  if (!f?.stages?.length || !sec) return;
+  sec.style.display = '';
+  const scale = f.bar_scale_n || f.stages.find(s => s.id === 'mart')?.n || 1;
+  const u = f.universe_summary;
+  const universeLine = u?.data_backed
+    ? `All company moves: <strong>${(u.daily_all_moves||0).toLocaleString()}/day</strong> (${fmtShare(u.pct_mart_of_all_moves)} of moves reach mart; Covered ship-date loads ~${(u.daily_covered||0).toLocaleString()}/day, mart is ${fmtShare(u.pct_mart_of_covered)} of those). `
+    : '';
+  document.getElementById('funnelNote').innerHTML =
+    `${universeLine}How we narrow to the volatile subset in this readout. Mart and report cohort use avail <strong>${M.cohort_rule?.split('avail ')[1] || ''}</strong>; problem gate: <strong>${M.problem_rule || ''}</strong>. ` +
+    `Lead Time splits below: <strong>high confidence</strong> (clock-only, no ≥10% index drift) vs <strong>index co-occur</strong> (same primary label, market indices also moved).`;
+
+  document.getElementById('funnelViz').innerHTML = f.stages.map(s => {
+    const color = FUNNEL_COLORS[s.id] || '#3b6fb5';
+    const widthPct = s.is_estimate
+      ? Math.min(100, Math.round(((s.n_high || s.n || scale) / scale) * 100))
+      : Math.max(2, Math.round(((s.n || 0) / scale) * 100));
+    const count = s.is_estimate
+      ? `${(s.n_low||0).toLocaleString()}–${(s.n_high||0).toLocaleString()}`
+      : (s.n||0).toLocaleString();
+    const share = s.pct_of_mart != null ? `${fmtShare(s.pct_of_mart)} of mart` :
+      s.pct_of_prior != null ? `${fmtShare(s.pct_of_prior)} of prior` : '';
+    const barCls = s.is_estimate ? 'funnel-bar est' : 'funnel-bar';
+    const barStyle = s.is_estimate ? `width:${widthPct}%;border-color:${color}` : `width:${widthPct}%;background:${color}`;
+    return `<div class="funnel-row"><div><div class="funnel-label">${s.label}</div>${s.note ? `<div class="funnel-note">${s.note}</div>` : ''}</div><div class="funnel-track"><div class="${barCls}" style="${barStyle}"></div></div><div><div class="funnel-count">${count}</div>${share ? `<div class="funnel-pct">${share}</div>` : ''}</div></div>`;
+  }).join('');
+
+  const bands = f.mart_lead_bands || [];
+  document.getElementById('funnelBands').innerHTML = bands.length
+    ? bands.map(b => `<div class="funnel-band"><div class="v">${(b.n||0).toLocaleString()}</div><div class="l">${b.band} lead · ${fmtShare(b.pct_of_mart)} of mart</div></div>`).join('')
+    : '';
+}
+
+function renderVolatilityLayer() {
+  const vol = D.volatility_overview;
+  const sec = document.getElementById('volatilitySection');
+  if (!vol?.length || !sec) return;
+  sec.style.display = '';
+  document.getElementById('volatilityNote').innerHTML =
+    `All long-lead shipments in window vs <strong>volatile</strong> (ETP50 avail→48hr shift ${M.problem_rule}) vs <strong>stable</strong> (below threshold). Movement-category sections below focus on volatile loads; tables at right show category mix within each volatility segment.`;
+
+  document.getElementById('volatilityTable').innerHTML =
+    `<table><thead><tr><th>Segment</th><th>Loads</th><th>Share</th><th>Avg $</th><th>Avg %</th><th>Med $</th><th>Med %</th></tr></thead><tbody>${
+      vol.map(r => `<tr><td><span class="cat-swatch" style="background:${VCOLORS[r.segment]||'#b8c0cc'}"></span>${r.label}</td><td>${r.n_loads.toLocaleString()}</td><td>${fmtShare(r.pct_of_parent)}</td><td>${fmtAmt(r.avg_shift_amt)}</td><td>${fmtPct(r.avg_shift_pct)}</td><td>${fmtAmt(r.med_shift_amt)}</td><td>${fmtPct(r.med_shift_pct)}</td></tr>`).join('')
+    }</tbody></table>`;
+
+  const vs = vol.filter(r => r.segment !== 'all');
+  if (typeof Chart !== 'undefined' && vs.length) {
+    new Chart(volatilityDonut, {
+      type: 'doughnut',
+      data: {
+        labels: vs.map(r => r.label),
+        datasets: [{
+          data: vs.map(r => r.n_loads),
+          backgroundColor: vs.map(r => VCOLORS[r.segment] || '#b8c0cc'),
+          borderWidth: 2, borderColor: '#fff',
+        }],
+      },
+      options: {
+        maintainAspectRatio: false, cutout: '58%',
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } },
+          tooltip: { callbacks: { label: ctx => {
+            const r = vs[ctx.dataIndex];
+            return ` ${r.label}: ${r.n_loads.toLocaleString()} (${fmtShare(r.pct_of_parent)}, avg ${fmtAmt(r.avg_shift_amt)})`;
+          }}},
+        },
+      },
+    });
+  }
+
+  const byVol = D.category_by_volatility || {};
+  const blocks = [];
+  for (const [seg, label] of [['all','All shipments'],['volatile','Volatile'],['stable','Stable']]) {
+    const rows = byVol[seg];
+    if (!rows?.length) continue;
+    blocks.push(`<div class="volatility-by-cat"><h4><span class="cat-swatch" style="background:${VCOLORS[seg]||'#b8c0cc'}"></span>${label} — movement category mix</h4>${
+      tableHtml(['Category','Loads','Share','Avg $','Avg %'],
+        rows.map(r => `<tr><td><span class="cat-swatch" style="background:${COLORS[r.category]||'#b8c0cc'}"></span>${r.label}</td><td>${r.n_loads.toLocaleString()}</td><td>${fmtShare(r.pct)}</td><td>${fmtAmt(r.avg_shift_amt)}</td><td>${fmtPct(r.avg_shift_pct)}</td></tr>`))
+    }</div>`);
+  }
+  document.getElementById('volatilityByCategory').innerHTML = blocks.join('');
+}
+
+document.getElementById('kpis').innerHTML = [
+  [M.n_problem?.toLocaleString(), 'Volatile loads (≥ threshold)'],
+  [fmtPct(M.pct_problem_of_parent), 'Share of parent cohort'],
+  [M.leadtime_hc_n?.toLocaleString(), 'Lead Time — high confidence'],
+  [fmtAmt(M.leadtime_hc_avg_amt), 'HC avg $ shift'],
+  [fmtPct(M.leadtime_hc_avg_pct), 'HC avg % shift'],
+  [fmtAmt(M.leadtime_hc_avg_etp50), 'HC avg ETP50 @ avail'],
+].map(([v,l])=>`<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+
+renderCohortFunnel();
+renderVolatilityLayer();
+
+document.getElementById('categoryNote').innerHTML =
+  `Volatile loads (avail→48hr ETP50): <strong>${M.problem_rule}</strong> — <strong>${M.n_problem?.toLocaleString()}</strong> loads. ` +
+  `Donut splits <strong>Lead Time</strong> by index co-occurrence (DAT/fuel/lag7 ≥10% endpoint drift) — primary Random stays &lt;1% because clocks win the waterfall, but index drift co-occurs on ~half of volatile lead-time loads. Segment tables below remain the three-way primary collapse.`;
+
+const rows = D.category_breakdown || [];
+if (rows.length) {
+  document.getElementById('categoryTable').innerHTML =
+    `<table><thead><tr><th>Category</th><th>Loads</th><th>Avg $</th><th>Avg %</th></tr></thead><tbody>${
+      rows.map(r => `<tr><td><span class="cat-swatch" style="background:${COLORS[r.category]||'#b8c0cc'}"></span>${r.label}</td><td>${r.n_loads.toLocaleString()}</td><td>${fmtAmt(r.avg_shift_amt)}</td><td>${fmtPct(r.avg_shift_pct)}</td></tr>`).join('')
+    }</tbody></table>`;
+  if (typeof Chart !== 'undefined') {
+    new Chart(categoryDonut, {
+      type: 'doughnut',
+      data: {
+        labels: rows.map(r => r.label),
+        datasets: [{
+          data: rows.map(r => r.n_loads),
+          backgroundColor: rows.map(r => COLORS[r.category] || '#b8c0cc'),
+          borderWidth: 2, borderColor: '#fff',
+        }],
+      },
+      options: {
+        maintainAspectRatio: false, cutout: '58%',
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } },
+          tooltip: { callbacks: { label: ctx => {
+            const r = rows[ctx.dataIndex];
+            return ` ${r.label}: ${r.n_loads.toLocaleString()} (${(r.pct*100).toFixed(1)}%, avg ${fmtAmt(r.avg_shift_amt)})`;
+          }}},
+        },
+      },
+    });
+  }
+}
+
+const pivot = D.segment_pivot || [];
+if (pivot.length) {
+  document.getElementById('segmentPivot').innerHTML =
+    `<table><thead><tr><th>Category</th><th>Parent n</th><th>Parent avg $</th><th>Problem n</th><th>Problem avg $</th><th>Stable n</th><th>Stable avg $</th><th>% of label ≥10%</th></tr></thead><tbody>${
+      pivot.map(r => `<tr><td><span class="cat-swatch" style="background:${(M.collapsed_colors||COLORS)[r.collapsed_category]||'#b8c0cc'}"></span>${r.category_label}</td><td>${(r.n_parent||0).toLocaleString()}</td><td>${fmtAmt(r.avg_amt_parent)}</td><td>${(r.n_problem||0).toLocaleString()}</td><td>${fmtAmt(r.avg_amt_problem)}</td><td>${(r.n_stable||0).toLocaleString()}</td><td>${fmtAmt(r.avg_amt_stable)}</td><td>${fmtPct(r.pct_category_problem)}</td></tr>`).join('')
+    }</tbody></table>`;
+}
+
+const details = D.category_details || {};
+const detailEl = document.getElementById('categoryDetails');
+const blocks = [];
+
+function tableHtml(cols, bodyRows) {
+  return `<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</thead><tbody>${bodyRows.join('')}</tbody></table>`;
+}
+
+if (details.LoadFeatures?.length) {
+  blocks.push(`<div class="detail-wrap"><h3><span class="cat-swatch" style="background:${COLORS.LoadFeatures}"></span>Load Features — sub-type</h3><p class="note">Shipment Change vs Difficulty Override within Load Features problem loads.</p>${
+    tableHtml(['Sub-type','Loads','Share','Avg $','Avg %','% ↑','% ↓'],
+      details.LoadFeatures.map(r=>`<tr><td>${r.label}</td><td>${r.n_loads.toLocaleString()}</td><td>${fmtShare(r.pct_of_group)}</td><td>${fmtAmt(r.avg_shift_amt)}</td><td>${fmtPct(r.avg_shift_pct)}</td><td>${fmtShare(r.pct_shift_positive)}</td><td>${fmtShare(r.pct_shift_negative)}</td></tr>`))
+  }</div>`);
+}
+
+if (details.LeadTime?.length) {
+  const ltHasPricing = details.LeadTime.some(r => r.att_create != null);
+  const ltCols = ltHasPricing
+    ? ['Path shape','Loads','Share of LC','Avg $','Avg %','% ↑','% ↓','Att p50 @ create','MAE @ create','Att p50 @ book','MAE @ book']
+    : ['Path shape','Loads','Share of LC','Avg $','Avg %','% ↑','% ↓'];
+  blocks.push(`<div class="detail-wrap"><h3><span class="cat-swatch" style="background:${COLORS.LeadTimeClockOnly||COLORS.LeadTime||'#3d8f83'}"></span>Lead Time — path shape</h3><p class="note">Sub-breakdown of Lead Time problem loads by indexed ETP50 climb from available→48hr (checkpoint deltas on etp50_idx_*).${ltHasPricing ? ' Pricing columns: ETP p50 attainment and MAE at load creation vs book (carrier cost realized).' : ''}</p>${
+    tableHtml(ltCols,
+      details.LeadTime.map(r=>`<tr><td>${r.label||r.archetype}</td><td>${r.n_loads.toLocaleString()}</td><td>${fmtShare(r.pct_of_lc)}</td><td>${fmtAmt(r.avg_shift_amt)}</td><td>${fmtPct(r.avg_shift_pct)}</td><td>${fmtShare(r.pct_shift_positive)}</td><td>${fmtShare(r.pct_shift_negative)}</td>${
+        ltHasPricing ? `<td>${fmtPct(r.att_create)}</td><td>${fmtAmt(r.mae_create)}</td><td>${fmtPct(r.att_book)}</td><td>${fmtAmt(r.mae_book)}</td>` : ''
+      }</tr>`))
+  }</div>`);
+}
+
+if (details.LeadTime_confidence?.length) {
+  const lcConfHasPricing = details.LeadTime_confidence.some(r => r.att_create != null && !r.is_estimate);
+  const lcConfCols = lcConfHasPricing
+    ? ['Segment','Loads','Share of LC','Avg $','Δ$ vs pop','Avg %','Δpp vs pop','Att @ create','ΔAtt create','MAE @ create','Att @ book','ΔAtt book','MAE @ book']
+    : ['Segment','Loads','Share of LC','Avg $','Δ$ vs pop','Avg %','Δpp vs pop'];
+  const fmtLiftAmt = v => v == null ? '—' : `${v>=0?'+':''}$${Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:0})}`;
+  const fmtLiftPct = v => v == null ? '—' : `${v>=0?'+':''}${(v*100).toFixed(1)}pp`;
+  const fmtLiftAtt = v => v == null ? '—' : `${v>=0?'+':''}${(v*100).toFixed(1)}pp`;
+  blocks.push(`<div class="detail-wrap"><h3><span class="cat-swatch" style="background:${COLORS.LeadTimeClockOnly||COLORS.LeadTime||'#3d8f83'}"></span>Lead Time — confidence vs confounders</h3><p class="note">High-confidence loads (clock-only, no ≥10% index drift) proxy deterministic lead-time repricing. Index co-occur and residual buckets are compared to the LC problem population baseline. Lift rows are descriptive — not causal attribution.</p>${
+    tableHtml(lcConfCols,
+      details.LeadTime_confidence.map(r => {
+        if (r.is_estimate) {
+          const lift = r.lift_amt_vs_high_conf != null ? fmtLiftAmt(r.lift_amt_vs_high_conf) : '—';
+          const liftPct = r.lift_pct_vs_high_conf != null ? fmtLiftPct(r.lift_pct_vs_high_conf) : '—';
+          const attLift = r.lift_att_create_vs_high_conf != null ? fmtLiftAtt(r.lift_att_create_vs_high_conf) : '';
+          return `<tr class="estimate-row"><td><em>${r.label}</em></td><td colspan="${lcConfCols.length-1}">${lift} avg shift · ${liftPct} avg %${attLift ? ` · ${attLift} att @ create` : ''}</td></tr>`;
+        }
+        return `<tr><td>${r.label}</td><td>${r.n_loads.toLocaleString()}</td><td>${fmtShare(r.pct_of_lc)}</td><td>${fmtAmt(r.avg_shift_amt)}</td><td>${fmtLiftAmt(r.lift_amt_vs_pop)}</td><td>${fmtPct(r.avg_shift_pct)}</td><td>${fmtLiftPct(r.lift_pct_vs_pop)}</td>${
+          lcConfHasPricing ? `<td>${fmtPct(r.att_create)}</td><td>${fmtLiftAtt(r.lift_att_create_vs_pop)}</td><td>${fmtAmt(r.mae_create)}</td><td>${fmtPct(r.att_book)}</td><td>${fmtLiftAtt(r.lift_att_book_vs_pop)}</td><td>${fmtAmt(r.mae_book)}</td>` : ''
+        }</tr>`;
+      }))
+  }</div>`);
+}
+
+if (details.LeadTime_secondary?.length) {
+  blocks.push(`<div class="detail-wrap"><h3><span class="cat-swatch" style="background:${COLORS.LeadTimeClockOnly||COLORS.LeadTime||'#3d8f83'}"></span>Lead Time — co-occurring signals</h3><p class="note">Secondary flags on Lead Time problem loads (non-primary signals that co-occur with clock-driven repricing).</p>${
+    tableHtml(['Signal','Loads','Rate'],
+      details.LeadTime_secondary.map(r=>`<tr><td>${r.label||r.signal}</td><td>${r.n_loads.toLocaleString()}</td><td>${fmtShare(r.pct_of_group)}</td></tr>`))
+  }</div>`);
+}
+
+if (details.Random?.length) {
+  blocks.push(`<div class="detail-wrap"><h3><span class="cat-swatch" style="background:${COLORS.Random}"></span>Random / Market — index vs residual</h3><p class="note">Random problem loads split by whether market-index drift was detected during avail→48hr.</p>${
+    tableHtml(['Segment','Loads','Share','Avg $','Avg %','% ↑','% ↓'],
+      details.Random.map(r=>`<tr><td>${r.label}</td><td>${r.n_loads.toLocaleString()}</td><td>${fmtShare(r.pct_of_group)}</td><td>${fmtAmt(r.avg_shift_amt)}</td><td>${fmtPct(r.avg_shift_pct)}</td><td>${fmtShare(r.pct_shift_positive)}</td><td>${fmtShare(r.pct_shift_negative)}</td></tr>`))
+  }</div>`);
+}
+
+detailEl.innerHTML = blocks.join('') || '<p class="note">No category detail rows for this cohort.</p>';
+document.getElementById('footer').textContent = `Generated ${M.generated_utc || ''}. Descriptive / associative — not causal attribution.`;
+</script>
+</body>
+</html>

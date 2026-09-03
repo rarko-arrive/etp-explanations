@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ETP/Slider Target Shifts on Long-Lead Time</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+:root{
+  --ink:#1a2332; --paper:#f6f7f9; --card:#ffffff; --line:#e3e7ee;
+  --amber:#e8a33d; --blue:#3b6fb5; --teal:#3d8f83; --plum:#8a5d9e;
+  --up:#c05b3c; --muted:#6b7686;
+  --mono:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:32px 20px 60px}
+.wrap{max-width:1060px;margin:0 auto}
+header{border-bottom:3px solid var(--ink);padding-bottom:18px;margin-bottom:26px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:27px;font-weight:750;letter-spacing:-.01em;margin:4px 0 14px}
+.cohort-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:4px}
+.cohort-chip{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.cohort-chip-accent{border-color:var(--ink);box-shadow:inset 3px 0 0 var(--blue)}
+.chip-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.chip-value{font-family:var(--mono);font-size:18px;font-weight:700;line-height:1.25}
+.chip-sub{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.35}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:22px 0 30px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.kpi .v{font-family:var(--mono);font-size:24px;font-weight:700}
+.kpi .l{font-size:12px;color:var(--muted);margin-top:2px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin-bottom:22px}
+h2{font-size:17px;font-weight:700;margin-bottom:2px}
+.note{font-size:13px;color:var(--muted);margin-bottom:14px}
+.chartbox{position:relative;height:360px}
+.chartbox.short{height:280px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:right;padding:7px 10px;border-bottom:2px solid var(--ink)}
+th:first-child,td:first-child{text-align:left}
+td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+td.pos{color:var(--up);font-weight:600}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:10px;background:#eef1f6;color:var(--muted)}
+.tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tab{font-family:var(--mono);font-size:12px;padding:5px 12px;border:1px solid var(--line);border-radius:16px;background:none;cursor:pointer;color:var(--muted)}
+.tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.callout{border-left:4px solid var(--amber);background:#fdf7ec;padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0;font-size:14px}
+details{margin-top:12px;font-size:13px;color:var(--muted)}
+summary{cursor:pointer;font-weight:600;color:var(--ink)}
+.explorer-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.explorer-bar label{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.explorer-bar input,.explorer-bar select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);min-width:200px}
+.explorer-bar select{min-width:180px}
+.explorer-nav{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.explorer-nav button{font:inherit;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer;color:var(--ink)}
+.explorer-nav button:hover{background:#eef1f6}
+.explorer-nav button:disabled{opacity:.45;cursor:not-allowed}
+.explorer-nav .rank-label{font-family:var(--mono);font-size:12px;color:var(--muted);min-width:88px;text-align:center}
+.explorer-nav .preset-btn{border-color:var(--teal);color:var(--teal)}
+.category-grid{display:grid;grid-template-columns:minmax(240px,1fr) minmax(260px,1.1fr);gap:20px;align-items:center}
+.chartbox.donut{height:300px;max-width:360px;margin:0 auto}
+.category-table-wrap table{font-size:13px}
+.category-table-wrap td:last-child,.category-table-wrap th:last-child{text-align:right}
+.leadtime-archetype-wrap{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+.leadtime-archetype-wrap h3{font-size:15px;margin:0 0 4px;color:var(--ink)}
+.cat-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px;vertical-align:middle}
+#loadMeta:empty{display:none}
+#loadMeta .load-meta-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;line-height:1.45}
+.load-id-copy{font-family:var(--mono);font-size:15px;font-weight:700;background:#eef1f6;border:1px solid var(--line);border-radius:6px;padding:3px 10px;cursor:pointer;color:var(--ink)}
+.load-id-copy:hover{background:#e3e7ee;border-color:#cfd6e0}
+.load-id-copy.copied{border-color:var(--teal);color:var(--teal);background:#edf7f5}
+.load-meta-endpoints{font-family:var(--mono);font-size:14px;font-weight:600}
+.load-meta-shift{font-family:var(--mono);font-size:14px;color:var(--up);font-weight:600}
+.load-meta-note{font-size:12px;color:var(--muted);width:100%}
+.explorer-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,340px);gap:18px;align-items:start;margin-top:4px}
+.category-panel{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px 18px;font-size:13px;line-height:1.5;max-height:520px;overflow:auto}
+.cat-panel-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.category-panel h3{font-size:16px;margin:4px 0 6px}
+.cat-panel-tagline{font-size:13px;color:var(--muted);margin-bottom:10px}
+.cat-panel-summary{margin-bottom:12px}
+.cat-panel-priority{font-size:12px;color:var(--muted);margin:-4px 0 12px;padding:8px 10px;background:#eef1f6;border-radius:6px;line-height:1.45}
+.cat-panel-block{margin-bottom:12px}
+.cat-panel-block h4{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.cat-panel-block ul{margin:0;padding-left:18px}
+.cat-panel-block li{margin-bottom:4px}
+.cat-panel-block li.on{font-weight:600;color:var(--ink)}
+.load-signal-grid{display:grid;gap:4px;font-family:var(--mono);font-size:12px}
+.load-signal-row{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed #e8ecf2;padding-bottom:3px}
+.load-signal-row span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap}
+.mermaid-wrap{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;overflow:auto}
+.mermaid-wrap svg{max-width:100%;height:auto!important}
+.mermaid-fallback{font-family:var(--mono);font-size:10px;white-space:pre-wrap;color:var(--muted)}
+.load-annotations{margin-top:10px;font-size:12px;color:var(--muted);min-height:0}
+.load-annotations:empty{display:none}
+.load-annotations h4{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.load-ann-list{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+.load-ann-item{display:flex;align-items:baseline;gap:8px;font-family:var(--mono);font-size:11px}
+.load-ann-mark{color:var(--ink);font-weight:600;min-width:88px}
+.load-ann-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.mde-banner{background:#f3ebfa;border-left:4px solid #8a5d9e;padding:10px 14px;border-radius:0 8px 8px 0;margin:0 0 10px;font-size:13px;line-height:1.45}
+.mde-banner strong{color:#5c3d72}
+.mde-banner-list{margin:6px 0 0;padding:0;list-style:none;font-family:var(--mono);font-size:11px;color:var(--muted)}
+@media(max-width:900px){.explorer-body{grid-template-columns:1fr}.category-panel{max-height:none}}
+@media(max-width:640px){.chartbox{height:280px}}
+</style>
+</head>
+<body><div class="wrap">
+<header>
+  <div class="eyebrow">__EYEBROW__</div>
+  <h1>ETP/Slider Target Shifts on Long-Lead Time</h1>
+  __COHORT_STRIP__
+</header>
+
+<div class="kpis" id="kpis"></div>
+
+<section>
+  <h2>The drift curve</h2>
+  <div class="note">__NOTE_DRIFT__</div>
+  <div class="chartbox"><canvas id="curve"></canvas></div>
+  <div class="callout" id="curveCallout"></div>
+</section>
+
+<section id="attritionSection">
+  <h2>__ATTRITION_TITLE__</h2>
+  <div class="note">__NOTE_ATTRITION__</div>
+  <div class="chartbox short"><canvas id="attr"></canvas></div>
+</section>
+
+<section>
+  <h2>Shift by window — average vs median</h2>
+  <div class="tabs" id="mtabs"></div>
+  <div class="note">__NOTE_TABLE__</div>
+  <div id="btable"></div>
+</section>
+
+<section>
+  <h2>Average vs median per window (ETP50)</h2>
+  <div class="note">__NOTE_AVMED__</div>
+  <div class="chartbox short"><canvas id="avmed"></canvas></div>
+</section>
+
+__CATEGORY_SECTION__
+
+__EXPLORER_SECTION__
+
+<section>
+  <details><summary>Methodology &amp; caveats</summary>
+  <p style="margin-top:8px">__METHODOLOGY__</p>
+  </details>
+</section>
+
+</div>
+<script>
+const D = __DATA_JSON__;
+const C = {amber:'#e8a33d', blue:'#3b6fb5', teal:'#3d8f83', plum:'#8a5d9e', ink:'#1a2332', up:'#c05b3c', muted:'#b8c0cc'};
+const CAT_COLORS = {
+  ShipmentChange: C.amber,
+  LeadtimeChange: C.teal,
+  DeterministicChange: C.teal,
+  RandomChange: C.blue,
+  DifficultyOverride: C.plum,
+  Unclassified: C.muted,
+  MDE: '#8a5d9e',
+};
+function normalizeCategory(cat) {
+  return cat === 'DeterministicChange' ? 'LeadtimeChange' : (cat || 'Unclassified');
+}
+const pct2 = v => (v>=0?'+':'')+(v*100).toFixed(2)+'%';
+
+const M = D.meta || {};
+const ATTRIBUTION_COLORS = M.attribution_colors || {
+  LoadFeatures: C.amber,
+  LeadTimeClockOnly: C.teal,
+  LeadTimeIndexCooccur: '#5ba4c9',
+  Random: C.blue,
+};
+function categoryColor(cat) {
+  return ATTRIBUTION_COLORS[cat] || CAT_COLORS[normalizeCategory(cat)] || C.muted;
+}
+const MARK_ORDER=[999,168,144,120,96,72,48,24];
+const DAYLBL={999:'Available',168:'7 days out',144:'6 days out',120:'5 days out',96:'4 days out',72:'3 days out',48:'2 days out',24:'1 day out'};
+const curveByMark=Object.fromEntries(D.curve.map(r=>[r.MARK_HRS,r]));
+const cv=MARK_ORDER.map(h=>curveByMark[h]).filter(Boolean).map(r=>({...r, MARK_LABEL: DAYLBL[r.MARK_HRS] || r.MARK_LABEL}));
+
+function reorderPts(pts) {
+  if (!pts || !pts.marks) return pts;
+  const idxByMark=Object.fromEntries(pts.marks.map((h,i)=>[h,i]));
+  const marks=MARK_ORDER.filter(h=>h in idxByMark);
+  return {
+    marks,
+    labels: marks.map(h=>DAYLBL[h] || pts.labels[idxByMark[h]]),
+    idx: marks.map(h=>pts.idx[idxByMark[h]]),
+    val: marks.map(h=>pts.val[idxByMark[h]]),
+  };
+}
+const last = cv[cv.length-1];
+const kb = D.summary.reduce((a,b)=>a.AVG_ETP50_SHIFT_PCT>b.AVG_ETP50_SHIFT_PCT?a:b,D.summary[0]);
+const firstWeek = cv.length>1 ? (cv[1].ETP50_AVG_IDX-100).toFixed(1)+'%' : '—';
+const firstWeekNum = cv.length>1 ? (cv[1].ETP50_AVG_IDX-100) : 0;
+
+function renderDom() {
+  if (D.meta && D.meta.cohort_mode === 'survival') {
+    const sec = document.getElementById('explorerSection');
+    if (sec) sec.style.display = 'none';
+  }
+  if (D.meta && D.meta.attrition_flat) {
+    const sec = document.getElementById('attritionSection');
+    if (sec) sec.style.display = 'none';
+  }
+  document.getElementById('kpis').innerHTML = [
+   [(last.ETP50_AVG_IDX-100).toFixed(1)+'%','Avg ETP50 rise, Available → 24h out'],
+   [firstWeek,'Avg ETP50 drift, Available → 7 days out'],
+   [pct2(kb.AVG_ETP50_SHIFT_PCT),'Steepest window: '+kb.BUCKET],
+  ].map(([v,l])=>`<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+
+  const p25 = last.ETP50_P25_IDX.toFixed(1);
+  const p75 = last.ETP50_P75_IDX.toFixed(1);
+  const medFlat = cv[1] && cv[1].ETP50_MED_IDX < 100.5;
+  const weekLead = firstWeekNum < 0.5
+    ? `Average ETP50 moves ${firstWeek} through the 7-day mark and the median load ${medFlat ? "doesn't move" : 'moves modestly'}`
+    : `Average ETP50 rises ${firstWeek} by the 7-day mark (median ${medFlat ? 'flat' : 'up '+(cv[1].ETP50_MED_IDX-100).toFixed(1)+'%'})`;
+  document.getElementById('curveCallout').innerHTML =
+   `<strong>Lead-time drift.</strong> ${weekLead}. Steepest checkpoint window: <strong>${kb.BUCKET}</strong> (${pct2(kb.AVG_ETP50_SHIFT_PCT)} avg ETP50). Endpoint (24h out): avg +${(last.ETP50_AVG_IDX-100).toFixed(1)}%, P25 ≈ ${p25}, P75 ≈ ${p75}.`;
+
+  const MET={ETP50:'ETP50',ETP10:'ETP10',TARGET1:'Target 1',TARGET3:'Target 3'};
+  window.renderTable = function(m) {
+   const rows=D.summary.map(b=>{
+    const n = m.startsWith('TARGET')? b.N_LOADS_TARGETS : b.N_LOADS_ETP;
+    return `<tr><td>${b.BUCKET} <span class="pill">n=${n.toLocaleString()}</span></td>
+    <td class="${b['AVG_'+m+'_SHIFT_PCT']>0.001?'pos':''}">${pct2(b['AVG_'+m+'_SHIFT_PCT'])}</td>
+    <td>${pct2(b['MED_'+m+'_SHIFT_PCT'])}</td>
+    <td>$${b['AVG_'+m+'_SHIFT_AMT'].toFixed(0)}</td>
+    <td>$${Number(b['MED_'+m+'_SHIFT_AMT']).toFixed(0)}</td></tr>`;}).join('');
+   document.getElementById('btable').innerHTML=`<table><thead><tr><th>Window (days to pickup)</th><th>Avg %</th><th>Median %</th><th>Avg $</th><th>Median $</th></tr></thead><tbody>${rows}</tbody></table>`;
+   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.m===m));
+  };
+  document.getElementById('mtabs').innerHTML = Object.entries(MET).map(([k,v])=>`<button class="tab" data-m="${k}">${v}</button>`).join('');
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>renderTable(t.dataset.m));
+  renderTable('ETP50');
+}
+
+function renderCharts() {
+  if (typeof Chart === 'undefined') {
+    document.getElementById('curveCallout').innerHTML =
+      '<strong>Charts unavailable.</strong> Chart.js did not load (network required for CDN). KPIs and table above are still valid.';
+    return;
+  }
+  Chart.defaults.font.family = "-apple-system,'Segoe UI',Roboto,sans-serif";
+  Chart.defaults.color = '#6b7686';
+
+  new Chart(curve,{type:'line',data:{labels:cv.map(r=>r.MARK_LABEL),datasets:[
+   {label:'ETP50 P25–P75',data:cv.map(r=>r.ETP50_P75_IDX),borderWidth:0,pointRadius:0,backgroundColor:'rgba(59,111,181,.10)',fill:'+1',order:9},
+   {label:'',data:cv.map(r=>r.ETP50_P25_IDX),borderWidth:0,pointRadius:0,fill:false,order:9},
+   {label:'ETP50 (avg)',data:cv.map(r=>r.ETP50_AVG_IDX),borderColor:C.blue,backgroundColor:C.blue,borderWidth:3,pointRadius:3,tension:.25},
+   {label:'ETP50 (median)',data:cv.map(r=>r.ETP50_MED_IDX),borderColor:C.blue,backgroundColor:C.blue,borderWidth:1.5,borderDash:[5,4],pointRadius:0,tension:.25},
+   {label:'ETP10',data:cv.map(r=>r.ETP10_AVG_IDX),borderColor:C.teal,backgroundColor:C.teal,borderWidth:2,pointRadius:2.5,tension:.25},
+   {label:'Target 1',data:cv.map(r=>r.TARGET1_AVG_IDX),borderColor:C.amber,backgroundColor:C.amber,borderWidth:2,pointRadius:2.5,tension:.25},
+   {label:'Target 3',data:cv.map(r=>r.TARGET3_AVG_IDX),borderColor:C.plum,backgroundColor:C.plum,borderWidth:2,pointRadius:2.5,tension:.25},
+  ]},options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+   plugins:{legend:{labels:{filter:i=>i.text!==''}},
+    tooltip:{callbacks:{
+      label:c=>c.dataset.label?` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}`:null,
+      footer:items=>'n = '+cv[items[0].dataIndex].N_LOADS.toLocaleString()+' loads at mark'}}},
+   scales:{y:{title:{display:true,text:'Indexed value (Available = 100)'},grid:{color:'#eef1f6'}},x:{grid:{display:false}}}}});
+
+  new Chart(attr,{type:'bar',data:{labels:cv.map(r=>r.MARK_LABEL),datasets:[
+   {data:cv.map(r=>r.N_LOADS),backgroundColor:cv.map((r,i)=>i===0?C.ink:'rgba(59,111,181,.55)')}
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+   tooltip:{callbacks:{label:c=>` ${c.parsed.y.toLocaleString()} loads (${(100*c.parsed.y/cv[0].N_LOADS).toFixed(0)}% of cohort)`}}},
+   scales:{y:{title:{display:true,text:(D.meta&&D.meta.attrition_y_label)||'Loads with ETP50 at checkpoint'},grid:{color:'#eef1f6'}},x:{grid:{display:false}}}}});
+
+  new Chart(avmed,{type:'bar',data:{labels:D.summary.map(b=>b.BUCKET),datasets:[
+   {label:'Average ($)',data:D.summary.map(b=>b.AVG_ETP50_SHIFT_AMT),backgroundColor:C.blue,borderRadius:3},
+   {label:'Median ($)',data:D.summary.map(b=>b.MED_ETP50_SHIFT_AMT),backgroundColor:'rgba(59,111,181,.42)',minBarLength:8,borderRadius:3}
+  ]},options:{maintainAspectRatio:false,
+   plugins:{
+    legend:{position:'top',align:'end',labels:{boxWidth:12,padding:14}},
+    tooltip:{callbacks:{label:ctx=>{
+      const v=ctx.parsed.y;
+      if(ctx.dataset.label.startsWith('Median')&&v<0.5)
+        return ' Median: $0 (≥50% of loads unchanged)';
+      return ` ${ctx.dataset.label}: $${v.toFixed(0)}`;
+    }}}
+   },
+   scales:{
+    y:{beginAtZero:true,title:{display:true,text:'ETP50 shift per window ($)'},grid:{color:'#eef1f6'}},
+    x:{grid:{display:false}}
+   }}});
+}
+
+function renderCategoryBreakdown() {
+  const rows = D.category_breakdown;
+  const sec = document.getElementById('categorySection');
+  if (!rows || !rows.length) {
+    if (sec) sec.style.display = 'none';
+    return;
+  }
+  if (sec) sec.style.display = '';
+  const colors = rows.map(r => categoryColor(r.category));
+  const fmtAmt = v => v == null ? '—' : `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`;
+  const fmtPct = v => v == null ? '—' : `${(v*100).toFixed(1)}%`;
+  const hasMae = rows.some(r => r.mae_avail != null || r.mae_book != null);
+  const maeHdr = hasMae ? '<th>MAE @ avail</th><th>MAE @ book</th>' : '';
+  document.getElementById('categoryTable').innerHTML =
+    `<table><thead><tr><th>Category</th><th>Loads</th><th>Avg $</th><th>Avg %</th>${maeHdr}</tr></thead><tbody>${
+      rows.map(r => `<tr><td><span class="cat-swatch" style="background:${categoryColor(r.category)}"></span>${r.label || r.category}</td><td>${r.n_loads.toLocaleString()}</td><td>${fmtAmt(r.avg_shift_amt)}</td><td>${fmtPct(r.avg_shift_pct)}</td>${hasMae ? `<td>${fmtAmt(r.mae_avail)}</td><td>${fmtAmt(r.mae_book)}</td>` : ''}</tr>`).join('')
+    }</tbody></table>`;
+  if (typeof Chart === 'undefined') return;
+  new Chart(categoryDonut, {
+    type: 'doughnut',
+    data: {
+      labels: rows.map(r => r.label || r.category),
+      datasets: [{
+        data: rows.map(r => r.n_loads),
+        backgroundColor: colors,
+        borderWidth: 2,
+        borderColor: '#fff',
+      }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      cutout: '58%',
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const r = rows[ctx.dataIndex];
+              const amt = r.avg_shift_amt != null ? `, avg $${r.avg_shift_amt.toLocaleString()}` : '';
+              return ` ${r.label || r.category}: ${r.n_loads.toLocaleString()} (${(r.pct*100).toFixed(1)}%${amt})`;
+            },
+          },
+        },
+      },
+    },
+  });
+  renderMovementQa();
+  renderLeadtimeArchetypeBreakdown();
+  renderLeadtimeConfidenceBreakdown();
+}
+
+function renderLeadtimeConfidenceBreakdown() {
+  const rows = D.leadtime_confidence_breakdown;
+  const wrap = document.getElementById('leadtimeConfidenceBreakdownWrap');
+  const el = document.getElementById('leadtimeConfidenceBreakdownTable');
+  if (!rows || !rows.length || !wrap || !el) {
+    if (wrap) wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+  const fmtAmt = v => v == null ? '—' : `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`;
+  const fmtPct = v => v == null ? '—' : `${(v*100).toFixed(1)}%`;
+  const fmtShare = v => v == null ? '—' : `${(v*100).toFixed(1)}%`;
+  const fmtLiftAmt = v => v == null ? '—' : `${v>=0?'+':''}$${Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:0})}`;
+  const fmtLiftPct = v => v == null ? '—' : `${v>=0?'+':''}${(v*100).toFixed(1)}pp`;
+  el.innerHTML =
+    `<table><thead><tr><th>Segment</th><th>Loads</th><th>Share of LC</th><th>Avg $</th><th>Δ$ vs pop</th><th>Avg %</th><th>Δpp vs pop</th></tr></thead><tbody>${
+      rows.map(r => {
+        if (r.is_estimate) {
+          const bits = [];
+          if (r.lift_amt_vs_high_conf != null) bits.push(`${fmtLiftAmt(r.lift_amt_vs_high_conf)} avg shift`);
+          if (r.lift_pct_vs_high_conf != null) bits.push(`${fmtLiftPct(r.lift_pct_vs_high_conf)} avg %`);
+          return `<tr><td><em>${r.label}</em></td><td colspan="6">${bits.join(' · ') || '—'}</td></tr>`;
+        }
+        return `<tr><td>${r.label}</td><td>${r.n_loads.toLocaleString()}</td><td>${fmtShare(r.pct_of_lc)}</td><td>${fmtAmt(r.avg_shift_amt)}</td><td>${fmtLiftAmt(r.lift_amt_vs_pop)}</td><td>${fmtPct(r.avg_shift_pct)}</td><td>${fmtLiftPct(r.lift_pct_vs_pop)}</td></tr>`;
+      }).join('')
+    }</tbody></table>`;
+}
+
+function renderLeadtimeArchetypeBreakdown() {
+  const rows = D.leadtime_archetype_breakdown;
+  const wrap = document.getElementById('leadtimeArchetypeWrap');
+  const el = document.getElementById('leadtimeArchetypeTable');
+  if (!rows || !rows.length || !wrap || !el) {
+    if (wrap) wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+  const fmtAmt = v => v == null ? '—' : `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`;
+  const fmtPct = v => v == null ? '—' : `${(v*100).toFixed(1)}%`;
+  const fmtShare = v => v == null ? '—' : `${(v*100).toFixed(1)}%`;
+  const hasMae = rows.some(r => r.mae_avail != null || r.mae_book != null);
+  const maeHdr = hasMae ? '<th>MAE @ avail</th><th>MAE @ book</th>' : '';
+  el.innerHTML =
+    `<table><thead><tr><th>Path shape</th><th>Loads</th><th>Share of LC</th><th>Avg $</th><th>Avg %</th><th>% ↑</th><th>% ↓</th>${maeHdr}</tr></thead><tbody>${
+      rows.map(r => `<tr><td><span class="cat-swatch" style="background:${C.teal}"></span>${r.label || r.archetype}</td><td>${r.n_loads.toLocaleString()}</td><td>${fmtShare(r.pct_of_lc)}</td><td>${fmtAmt(r.avg_shift_amt)}</td><td>${fmtPct(r.avg_shift_pct)}</td><td>${fmtShare(r.pct_shift_positive)}</td><td>${fmtShare(r.pct_shift_negative)}</td>${hasMae ? `<td>${fmtAmt(r.mae_avail)}</td><td>${fmtAmt(r.mae_book)}</td>` : ''}</tr>`).join('')
+    }</tbody></table>`;
+}
+
+function renderMovementQa() {
+  const qa = D.movement_qa;
+  const wrap = document.getElementById('movementQaDetails');
+  const el = document.getElementById('movementQa');
+  if (!qa || !wrap || !el) return;
+  const lines = [];
+  const thr = qa.clock_delta_min;
+  const b = qa.book_2_pkup_delta_abs;
+  if (b) {
+    lines.push(`<strong>|book_2_pkup Δ|</strong> (avail→48hr, n=${b.n.toLocaleString()}): P25 ${b.p25}h · P50 ${b.p50}h · P75 ${b.p75}h · ${(b.pct_ge_threshold*100).toFixed(1)}% ≥ ${thr}h threshold (<code>CLOCK_DELTA_MIN</code>).`);
+  }
+  const d = qa.leadtime || qa.deterministic;
+  if (d) {
+    lines.push(`<strong>Lead Time Change</strong> (${d.n.toLocaleString()} loads): all clock-detected; ${d.n_clock_only.toLocaleString()} clock-only (no charge/difficulty flags)${d.avg_shift_amt != null ? `; avg shift $${d.avg_shift_amt.toLocaleString()}` : ''}.`);
+  }
+  if (qa.clocks_blocked_by_priority != null) {
+    lines.push(`<strong>Clocks moved but not labeled Lead Time Change</strong> (${qa.clocks_blocked_by_priority.toLocaleString()}): charge or difficulty flag took priority.`);
+  }
+  const r = qa.random_change;
+  if (r) {
+    lines.push(`<strong>RandomChange</strong> (${r.n.toLocaleString()}): ${r.n_index_detected.toLocaleString()} index-detected (DAT/fuel/lag7) · ${r.n_catchall.toLocaleString()} catch-all (no shipment/difficulty/clock/index signal).`);
+  }
+  el.innerHTML = lines.join('<br>');
+}
+
+let loadChart = null;
+let mermaidCounter = 0;
+
+const featureAnnotationPlugin = {
+  id: 'featureAnnotations',
+  afterDraw(chart) {
+    const ann = chart.options.plugins.featureAnnotations;
+    if (!ann || !ann.length) return;
+    const { ctx, chartArea, scales: { x, y } } = chart;
+    if (!x || !y) return;
+    ann.forEach((a, i) => {
+      if (a.index == null || a.index < 0) return;
+      const px = x.getPixelForValue(a.index);
+      const color = CAT_COLORS[a.category] || CAT_COLORS[normalizeCategory(a.category)] || C.muted;
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.55;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(px, chartArea.top);
+      ctx.lineTo(px, chartArea.bottom);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = color;
+      ctx.font = '600 10px -apple-system, sans-serif';
+      ctx.fillText(a.text, px + 4, chartArea.top + 12 + i * 13);
+      ctx.restore();
+    });
+  },
+};
+if (typeof Chart !== 'undefined') Chart.register(featureAnnotationPlugin);
+
+function renderLoadAnnotations(annotations, marks) {
+  const el = document.getElementById('loadAnnotations');
+  if (!el) return;
+  if (!annotations || !annotations.length) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = '<h4>Feature &amp; MDE changes on timeline</h4><ul class="load-ann-list">'
+    + annotations.map(a => {
+      const idx = marks.indexOf(a.mark_hrs);
+      if (idx < 0) return '';
+      const color = CAT_COLORS[a.category] || CAT_COLORS[normalizeCategory(a.category)] || C.muted;
+      const ts = a.applied_at_utc ? String(a.applied_at_utc).slice(0, 16).replace('T', ' ') + ' UTC' : '';
+      const tsSuffix = ts ? ` <span style="color:var(--muted)">· ${ts}</span>` : '';
+      return `<li class="load-ann-item"><span class="load-ann-dot" style="background:${color}"></span>`
+        + `<span class="load-ann-mark">${a.label || a.mark_label || ''}</span>`
+        + `<span>${a.text}${tsSuffix}</span></li>`;
+    }).join('')
+    + '</ul>';
+}
+
+function chartFeatureAnnotations(annotations, marks) {
+  if (!annotations || !marks) return [];
+  return annotations.map(a => ({
+    index: marks.indexOf(a.mark_hrs),
+    text: a.text,
+    category: a.category,
+  })).filter(a => a.index >= 0);
+}
+
+if (typeof mermaid !== 'undefined') {
+  mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose', flowchart: { htmlLabels: true } });
+}
+
+const SIGNAL_LABELS = {
+  total_charges_delta: 'Total charges Δ',
+  hard_ft_delta: 'hard_ft Δ',
+  book_2_pkup_delta: 'book_2_pkup Δ',
+  avail_2_book_delta: 'avail_2_book Δ',
+  dat_rate_delta: 'DAT rate Δ',
+  fuel_cost_delta: 'Fuel Δ',
+  lag7_cpm_delta: 'lag7 CPM Δ',
+  equipment_type_avail: 'Equip @ avail',
+  equipment_type_48hr: 'Equip @ 48hr',
+};
+
+function fmtUsdSigned(v) {
+  if (v == null || Number.isNaN(v)) return '—';
+  const n = Number(v);
+  const abs = Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  if (n > 0) return `+$${abs}`;
+  if (n < 0) return `−$${abs}`;
+  return '$0';
+}
+
+function fmtSignalValue(key, v, sig) {
+  if (key.startsWith('equipment_type')) return String(v);
+  if (key.includes('book') || key.includes('avail_2')) return `${v >= 0 ? '+' : ''}${v.toFixed(0)}h`;
+  if (key.includes('hard_ft')) return `${v >= 0 ? '+' : ''}${v.toFixed(0)}`;
+  let out = fmtUsdSigned(v);
+  const rel = sig && sig.index_rel_pct && sig.index_rel_pct[key];
+  if (rel != null) {
+    const gate = (sig.index_gate_pct != null ? sig.index_gate_pct : 0.10);
+    const fired = sig.index_fired && sig.index_fired[key];
+    const pctLabel = `${(rel * 100).toFixed(1)}% of baseline`;
+    const gateLabel = fired ? '≥ gate — index fired' : `< ${(gate * 100).toFixed(0)}% gate — not index`;
+    out += ` <span style="color:var(--muted)">(${pctLabel}, ${gateLabel})</span>`;
+  }
+  return out;
+}
+
+function flowchartHighlightNode(category, meta) {
+  const nodes = (D.movement_categories && D.movement_categories.flowchart_nodes) || {};
+  category = normalizeCategory(category);
+  if (category === 'RandomChange') {
+    const idx = meta.signals && meta.signals.flags && meta.signals.flags.index_change_ind;
+    return idx === 1 ? 'R' : 'R2';
+  }
+  return nodes[category] || 'U';
+}
+
+async function renderMermaidDiagram(el, diagram) {
+  if (!el) return;
+  if (typeof mermaid === 'undefined') {
+    el.innerHTML = `<pre class="mermaid-fallback">${diagram}</pre>`;
+    return;
+  }
+  const id = `mermaid-${++mermaidCounter}`;
+  try {
+    const { svg } = await mermaid.render(id, diagram);
+    el.innerHTML = svg;
+  } catch {
+    el.innerHTML = `<pre class="mermaid-fallback">${diagram}</pre>`;
+  }
+}
+
+function renderCategoryPanel(meta) {
+  const panel = document.getElementById('loadCategoryPanel');
+  if (!panel || !D.movement_categories) return;
+  const docs = D.movement_categories.categories || {};
+  const cat = normalizeCategory(meta.category);
+  const doc = docs[cat] || docs.Unclassified;
+  if (!doc) return;
+
+  document.getElementById('catPanelTitle').textContent = doc.label || cat;
+  document.getElementById('catPanelTagline').textContent = doc.tagline || '';
+  document.getElementById('catPanelSummary').textContent = doc.summary || '';
+  const priorityNote = D.movement_categories.priority_note || '';
+  document.getElementById('catPanelPriorityNote').textContent = priorityNote;
+
+  const criteriaEl = document.getElementById('catPanelCriteria');
+  const criteria = doc.criteria || [];
+  criteriaEl.innerHTML = criteria.length
+    ? `<h4>How this label is assigned</h4><ul>${
+      criteria.map(c => `<li>${c}</li>`).join('')
+    }</ul>`
+    : '';
+
+  const sigEl = document.getElementById('catPanelLoadSignals');
+  const sig = meta.signals;
+  if (sig) {
+    const deltaKeys = Object.keys(SIGNAL_LABELS).filter(k => sig[k] != null);
+    let html = '<h4>This load</h4><div class="load-signal-grid">';
+    deltaKeys.forEach(k => {
+      html += `<div class="load-signal-row"><span>${SIGNAL_LABELS[k]}</span><span>${fmtSignalValue(k, sig[k], sig)}</span></div>`;
+    });
+    if (meta.etp50_avail && sig.lag7_cpm_delta != null) {
+      const etpPct = Math.abs(sig.lag7_cpm_delta) / meta.etp50_avail;
+      html += `<div class="load-signal-row"><span>lag7 Δ vs ETP50 @ avail</span><span style="color:var(--muted)">${(etpPct * 100).toFixed(1)}% (not used for index gate)</span></div>`;
+    }
+    if (sig.flags) {
+      const flagBits = [];
+      if (sig.flags.charge_inc_ind) flagBits.push('charge_inc');
+      if (sig.flags.equip_change_ind) flagBits.push('equip_change');
+      if (sig.flags.hard_ft_inc_ind) flagBits.push('hard_ft_inc');
+      if (sig.flags.clocks_moved_ind) flagBits.push('clocks_moved');
+      if (sig.flags.clock_only_ind) flagBits.push('clock_only');
+      if (sig.flags.index_change_ind) flagBits.push('index_change');
+      if (flagBits.length) {
+        html += `<div class="load-signal-row"><span>Flags fired</span><span>${flagBits.join(', ')}</span></div>`;
+        const suppressed = flagBits.filter(f => {
+          const primary = normalizeCategory(meta.category);
+          if (primary === 'ShipmentChange') return f !== 'charge_inc' && f !== 'equip_change';
+          if (primary === 'DifficultyOverride') return f !== 'hard_ft_inc';
+          if (primary === 'LeadtimeChange') return f !== 'clocks_moved' && f !== 'clock_only';
+          if (primary === 'RandomChange') return f !== 'index_change';
+          return false;
+        });
+        if (suppressed.length) {
+          html += `<div class="load-signal-row"><span>Also moved (not primary)</span><span>${suppressed.join(', ')}</span></div>`;
+        }
+      }
+    }
+    html += '</div>';
+    sigEl.innerHTML = html;
+  } else {
+    sigEl.innerHTML = '<div class="cat-panel-block"><p class="cat-panel-tagline">No Davis enrichment on this load — rebuild cache for this avail window.</p></div>';
+  }
+
+  const activeNode = flowchartHighlightNode(cat, meta);
+  let diagram = D.movement_categories.flowchart;
+  diagram += `\nclassDef active fill:#edf7f5,stroke:#3d8f83,stroke-width:2.5px,color:#1a2332`;
+  diagram += `\nclass ${activeNode} active`;
+  renderMermaidDiagram(document.getElementById('catPanelMermaid'), diagram);
+}
+
+function fmtUsd(v) {
+  if (v == null || Number.isNaN(v)) return null;
+  return '$' + Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+async function copyLoadId(btn, loadnumber) {
+  const id = String(loadnumber);
+  try {
+    await navigator.clipboard.writeText(id);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = id;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  btn.classList.add('copied');
+  btn.title = 'Copied!';
+  setTimeout(() => {
+    btn.classList.remove('copied');
+    btn.title = 'Click to copy loadnumber';
+  }, 1500);
+}
+
+function renderLoadMeta(meta) {
+  const el = document.getElementById('loadMeta');
+  const catLabel = meta.category_label || meta.category;
+  const archLabel = meta.path_archetype_label;
+  const ltConfLabel = meta.leadtime_confidence_label;
+  const avail = fmtUsd(meta.etp50_avail);
+  const hr48 = fmtUsd(meta.etp50_48hr);
+  const shiftAmt = fmtUsd(meta.shift_amt);
+  const shiftPct = `+${(meta.shift_pct * 100).toFixed(1)}%`;
+  let shiftLine = '';
+  if (avail && hr48) {
+    shiftLine = `<span class="load-meta-endpoints">ETP50 ${avail} → ${hr48}</span>`
+      + `<span class="load-meta-shift">(${shiftAmt || ''}${shiftAmt ? ', ' : ''}${shiftPct})</span>`;
+  } else {
+    shiftLine = `<span class="load-meta-shift">${shiftPct}${shiftAmt ? ` (${shiftAmt})` : ''}</span>`;
+  }
+  let mdeBanner = '';
+  if (meta.mde && meta.mde.applied) {
+    const evts = meta.mde.events || [];
+    mdeBanner = `<div class="mde-banner"><strong>Market Movement MDE applied</strong>`
+      + (evts.length > 1 ? ` (${evts.length} applications on this load)` : '')
+      + `<ul class="mde-banner-list">`
+      + evts.map(e => {
+        const ts = e.applied_at_utc ? String(e.applied_at_utc).slice(0, 16).replace('T', ' ') : '';
+        return `<li>${e.description} · ${e.mark_label || ''}${ts ? ` · ${ts} UTC` : ''}</li>`;
+      }).join('')
+      + `</ul></div>`;
+  }
+  el.innerHTML = mdeBanner
+    + `<div class="load-meta-row">`
+    + `<button type="button" class="load-id-copy" title="Click to copy loadnumber">${meta.loadnumber}</button>`
+    + `<span class="pill">${catLabel}</span>`
+    + (ltConfLabel ? `<span class="pill">${ltConfLabel}</span>` : '')
+    + (archLabel ? `<span class="pill">${archLabel}</span>` : '')
+    + shiftLine
+    + `<span class="load-meta-note">avail → 48hr endpoint · chart indexed to Available = 100</span>`
+    + `</div>`;
+  el.querySelector('.load-id-copy')?.addEventListener('click', e => {
+    copyLoadId(e.currentTarget, meta.loadnumber);
+  });
+}
+
+function renderLoadExplorer() {
+  const ex = D.explorer;
+  const section = document.getElementById('explorerSection');
+  if (!ex || !ex.catalog || !ex.catalog.length) {
+    if (section) section.style.display = 'none';
+    return;
+  }
+
+  const categories = [...new Set(ex.catalog.map(r => r.category))].sort();
+  const catSel = document.getElementById('categoryFilter');
+  categories.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c;
+    const doc = D.movement_categories && D.movement_categories.categories && D.movement_categories.categories[normalizeCategory(c)];
+    o.textContent = doc ? doc.label : c;
+    catSel.appendChild(o);
+  });
+
+  const archSel = document.getElementById('archetypeFilter');
+  const ltConfWrap = document.getElementById('leadtimeConfidenceWrap');
+  const ltConfSel = document.getElementById('leadtimeConfidenceFilter');
+  const archLabels = ex.archetype_labels || {};
+  const archOrder = ex.archetype_order || [];
+  const presentArchetypes = [...new Set(ex.catalog.map(r => r.path_archetype).filter(Boolean))];
+  const sortedArchetypes = [
+    ...archOrder.filter(a => presentArchetypes.includes(a)),
+    ...presentArchetypes.filter(a => !archOrder.includes(a)).sort(),
+  ];
+  sortedArchetypes.forEach(a => {
+    if (a === 'unknown') return;
+    const o = document.createElement('option');
+    o.value = a;
+    o.textContent = archLabels[a] || a;
+    archSel.appendChild(o);
+  });
+  if (!sortedArchetypes.filter(a => a !== 'unknown').length) {
+    archSel.closest('div').style.display = 'none';
+  }
+
+  function syncLeadtimeConfidenceUi() {
+    const cat = normalizeCategory(catSel.value);
+    const show = cat === 'LeadtimeChange';
+    if (ltConfWrap) ltConfWrap.style.display = show ? '' : 'none';
+    if (!show && ltConfSel) ltConfSel.value = '';
+  }
+
+  function filteredCatalog() {
+    const cat = catSel.value;
+    const arch = archSel.value;
+    const ltConf = ltConfSel ? ltConfSel.value : '';
+    const q = document.getElementById('loadSearch').value.trim().toLowerCase();
+    return ex.catalog.filter(r => {
+      if (cat && r.category !== cat) return false;
+      if (arch && r.path_archetype !== arch) return false;
+      if (ltConf && normalizeCategory(cat) === 'LeadtimeChange') {
+        if (ltConf === 'isolated' && r.leadtime_confidence !== 'isolated') return false;
+        if (ltConf === 'index_co_occur' && r.leadtime_confidence !== 'index_co_occur') return false;
+      }
+      if (!q) return true;
+      return String(r.loadnumber).includes(q)
+        || r.label.toLowerCase().includes(q)
+        || (r.feature_change && r.feature_change.toLowerCase().includes(q))
+        || (r.path_archetype_label && r.path_archetype_label.toLowerCase().includes(q))
+        || (r.leadtime_confidence_label && r.leadtime_confidence_label.toLowerCase().includes(q))
+        || (q.includes('clock') && r.leadtime_confidence === 'isolated');
+    });
+  }
+
+  function syncPickers() {
+    const rows = filteredCatalog();
+    const list = document.getElementById('loadList');
+    const sel = document.getElementById('loadSelect');
+    list.innerHTML = rows.map(r => `<option value="${r.loadnumber}">${r.label}</option>`).join('');
+    const prev = sel.value;
+    sel.innerHTML = rows.map(r => `<option value="${r.loadnumber}">${r.label}</option>`).join('');
+    if (rows.length) {
+      const keep = rows.some(r => String(r.loadnumber) === prev);
+      sel.value = keep ? prev : String(rows[0].loadnumber);
+      plotLoad(sel.value);
+    } else {
+      document.getElementById('loadMeta').innerHTML = '<strong>No loads match.</strong> Clear filters or search.';
+      document.getElementById('catPanelTitle').textContent = '';
+      document.getElementById('catPanelTagline').textContent = '';
+      document.getElementById('catPanelSummary').textContent = '';
+      document.getElementById('catPanelCriteria').innerHTML = '';
+      document.getElementById('catPanelLoadSignals').innerHTML = '';
+      document.getElementById('catPanelMermaid').innerHTML = '';
+      document.getElementById('loadAnnotations').innerHTML = '';
+      document.getElementById('loadRank').textContent = '—';
+      document.getElementById('loadPrev').disabled = true;
+      document.getElementById('loadNext').disabled = true;
+      if (loadChart) { loadChart.destroy(); loadChart = null; }
+    }
+  }
+
+  function updateLoadNav(loadnumber) {
+    const rows = filteredCatalog();
+    const key = String(loadnumber);
+    const idx = rows.findIndex(r => String(r.loadnumber) === key);
+    const rankEl = document.getElementById('loadRank');
+    const prevBtn = document.getElementById('loadPrev');
+    const nextBtn = document.getElementById('loadNext');
+    if (idx < 0 || !rows.length) {
+      rankEl.textContent = '—';
+      prevBtn.disabled = true;
+      nextBtn.disabled = true;
+      return;
+    }
+    rankEl.textContent = `${idx + 1} / ${rows.length}`;
+    prevBtn.disabled = idx <= 0;
+    nextBtn.disabled = idx >= rows.length - 1;
+  }
+
+  function stepLoad(delta) {
+    const rows = filteredCatalog();
+    const sel = document.getElementById('loadSelect');
+    const idx = rows.findIndex(r => String(r.loadnumber) === sel.value);
+    if (idx < 0) return;
+    const next = idx + delta;
+    if (next < 0 || next >= rows.length) return;
+    sel.value = String(rows[next].loadnumber);
+    plotLoad(sel.value);
+  }
+
+  function startHcGallery() {
+    catSel.value = 'LeadtimeChange';
+    syncLeadtimeConfidenceUi();
+    if (ltConfSel) ltConfSel.value = 'isolated';
+    document.getElementById('loadSearch').value = '';
+    archSel.value = '';
+    syncPickers();
+    if (ex.hc_gallery && ex.hc_gallery.length) {
+      const first = ex.hc_gallery.find(r => ex.series[String(r.loadnumber)]);
+      if (first) {
+        document.getElementById('loadSelect').value = String(first.loadnumber);
+        plotLoad(first.loadnumber);
+      }
+    }
+  }
+
+  function plotLoad(loadnumber) {
+    const key = String(loadnumber);
+    const meta = ex.catalog.find(r => String(r.loadnumber) === key);
+    const ser = ex.series[key];
+    if (!meta || !ser) return;
+
+    updateLoadNav(loadnumber);
+    renderLoadMeta(meta);
+    renderCategoryPanel(meta);
+
+    if (typeof Chart === 'undefined') return;
+    const colors = {ETP50: C.blue, ETP10: C.teal, TARGET1: C.amber, TARGET3: C.plum};
+    const reordered = Object.fromEntries(
+      Object.entries(ser).map(([metric, pts]) => [metric, reorderPts(pts)])
+    );
+    const labels = reordered.ETP50 ? reordered.ETP50.labels
+      : (reordered.ETP10 || reordered.TARGET1 || {}).labels || [];
+    const marks = reordered.ETP50 ? reordered.ETP50.marks
+      : (reordered.ETP10 || reordered.TARGET1 || {}).marks || [];
+    const loadAnns = (ex.annotations && ex.annotations[key]) || [];
+    const mdeAnns = (ex.mde_annotations && ex.mde_annotations[key]) || [];
+    const allAnns = loadAnns.concat(mdeAnns);
+    renderLoadAnnotations(allAnns, marks);
+
+    const datasets = Object.entries(reordered).map(([metric, pts]) => ({
+      label: metric === 'TARGET1' ? 'Target 1' : metric === 'TARGET3' ? 'Target 3' : metric,
+      data: pts.idx,
+      metric,
+      borderColor: colors[metric] || C.ink,
+      backgroundColor: colors[metric] || C.ink,
+      borderWidth: metric === 'ETP50' ? 3 : 2,
+      pointRadius: 3,
+      tension: 0.25,
+    }));
+
+    if (loadChart) loadChart.destroy();
+    loadChart = new Chart(document.getElementById('loadChart'), {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          featureAnnotations: chartFeatureAnnotations(allAnns, marks),
+          legend: { position: 'top', align: 'end' },
+          tooltip: {
+            callbacks: {
+              label(ctx) {
+                const pts = reordered[ctx.dataset.metric];
+                if (!pts) return '';
+                const v = pts.val[ctx.dataIndex];
+                const idx = pts.idx[ctx.dataIndex];
+                return ` ${ctx.dataset.label}: ${idx.toFixed(1)} indexed` + (v != null ? ` ($${v.toFixed(0)})` : '');
+              },
+            },
+          },
+        },
+        scales: {
+          y: { title: { display: true, text: 'Indexed (Available = 100)' }, grid: { color: '#eef1f6' } },
+          x: { grid: { display: false } },
+        },
+      },
+    });
+  }
+
+  document.getElementById('loadSearch').addEventListener('input', syncPickers);
+  catSel.addEventListener('change', () => { syncLeadtimeConfidenceUi(); syncPickers(); });
+  archSel.addEventListener('change', syncPickers);
+  if (ltConfSel) ltConfSel.addEventListener('change', syncPickers);
+  document.getElementById('loadSelect').addEventListener('change', e => plotLoad(e.target.value));
+  document.getElementById('loadPrev').addEventListener('click', () => stepLoad(-1));
+  document.getElementById('loadNext').addEventListener('click', () => stepLoad(1));
+  document.getElementById('hcGalleryBtn').addEventListener('click', startHcGallery);
+  document.getElementById('loadSearch').addEventListener('change', e => {
+    const v = e.target.value.trim();
+    if (ex.series[v]) {
+      document.getElementById('loadSelect').value = v;
+      plotLoad(v);
+    }
+  });
+
+  syncLeadtimeConfidenceUi();
+  syncPickers();
+}
+
+renderDom();
+if (typeof Chart !== 'undefined') { renderCharts(); renderCategoryBreakdown(); renderLoadExplorer(); }
+else window.addEventListener('load', () => { renderCharts(); renderCategoryBreakdown(); renderLoadExplorer(); });
+</script>
+</body></html>
