@@ -18,6 +18,14 @@ export DQT_DATA_DIR := $(DQT_DATA)
 .DEFAULT_GOAL := help
 .PHONY: help install lint test explain
 
+# Support: make explain LOAD=9199475  OR  make explain 9199475
+ifneq ($(filter explain,$(MAKECMDGOALS)),)
+  _explain_extra := $(filter-out explain,$(MAKECMDGOALS))
+  ifneq ($(_explain_extra),)
+    LOAD := $(firstword $(_explain_extra))
+  endif
+endif
+
 help: ## list targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
@@ -30,7 +38,14 @@ lint: ## ruff
 test: ## pytest
 	uv run pytest tests/ -q
 
-explain: ## explain one load  [LOAD=9199475 | RANK=3]
+explain: ## explain one load  [LOAD=9199475 | RANK=3 | make explain 9199475]
 	uv run python scripts/explain_etp_load.py \
 		$(if $(LOAD),--load $(LOAD),--rank $(or $(RANK),1)) \
 		--data-dir $(DQT_DATA_DIR)
+
+# Swallow bare loadnumbers passed as goals (see _explain_extra above).
+ifneq ($(_explain_extra),)
+.PHONY: $(_explain_extra)
+$(_explain_extra):
+	@:
+endif

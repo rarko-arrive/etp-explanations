@@ -14,10 +14,16 @@ from dqt.etp_lifecycle.lightning import build_lightning_tracking
 from dqt.etp_mart import consecutive_feature_deltas
 from dqt.etp_slider.movement.orders import enrich_movement_flags
 from dqt.etp_slider.paths import resolve_etp_cache_dir
-from dqt.etp_slider.problem_loads.leadtime import _prepare_leadtime_pricing_frame
-from dqt.etp_slider.sql import HISTORY_CACHE
+from dqt.etp_slider.problem_loads.leadtime import (
+    _book_quotes_for_loads,
+    _join_book_time_quotes,
+    _prepare_leadtime_pricing_frame,
+    _score_pricing_slice,
+    join_lc_carrier_cost,
+)
+from dqt.etp_slider.sql import HISTORY_CACHE, SURVIVAL_PER_LOAD_CACHE
 from dqt.etp_timeline import build_load_timeline
-from dqt.score.constants import ID_COL
+from dqt.score.constants import COST_COL, ID_COL
 
 if TYPE_CHECKING:
     from dqt.etp_lake import EtpLake
@@ -120,6 +126,7 @@ def _resolve_paths(
 ) -> dict[str, Path]:
     base = resolve_data_dir(data_dir)
     cache = resolve_etp_cache_dir(base)
+    book_candidates = sorted(cache.glob("leadtime-book-quotes-*.parquet"))
     return {
         "data_dir": base,
         "cache": cache,
@@ -128,7 +135,29 @@ def _resolve_paths(
         "lc_tail": cache / "lc-tail-2025.parquet",
         "hist": cache / HISTORY_CACHE,
         "hc_index": cache / HC_OUTLIER_REL,
+        "survival": cache / SURVIVAL_PER_LOAD_CACHE,
+        "book_quotes": book_candidates[-1] if book_candidates else cache / "leadtime-book-quotes-missing.parquet",
     }
+
+
+def _join_book_quotes_readonly(frame: pl.DataFrame, paths: dict[str, Path]) -> pl.DataFrame:
+    """Join book-time quotes without writing supplement rows to the shared cache."""
+    book_cache = paths["book_quotes"]
+    if book_cache.is_file():
+        cached = pl.read_parquet(book_cache).join(frame.select(ID_COL), on=ID_COL, how="inner")
+        if not cached.is_empty():
+            return _join_book_time_quotes(frame, cached)
+
+    if not paths["hist"].is_file() or not paths["survival"].is_file():
+        return frame
+    book = _book_quotes_for_loads(
+        frame[ID_COL],
+        hist_path=paths["hist"],
+        survival_path=paths["survival"],
+    )
+    if book.is_empty():
+        return frame
+    return _join_book_time_quotes(frame, book)
 
 
 def select_outlier_cohort(
@@ -632,6 +661,107 @@ def summarize_load(
     }
 
 
+def pricing_accuracy_for_load(
+    loadnumber: int,
+    *,
+    etp50_avail: float | None = None,
+    data_dir: Path | str | None = None,
+    davis_cache: Path | str | None = None,
+    endpoint: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """ETP p50 MAE @ available and @ book for a covered (booked) load.
+
+    Returns ``None`` when survival/cost/book-quote inputs are unavailable.
+    """
+    paths = _resolve_paths(data_dir, davis_cache=davis_cache)
+    if not paths["survival"].is_file():
+        return None
+
+    surv = pl.read_parquet(paths["survival"]).filter(pl.col(ID_COL) == loadnumber)
+    if surv.is_empty() or surv["booked_on_utc"].null_count() == surv.height:
+        return {"covered": False, "reason": "not_booked"}
+
+    frame = surv.select(
+        ID_COL,
+        "booked_on_utc",
+        *[c for c in ("etp50_avail", "made_available_utc") if c in surv.columns],
+    )
+    frame = join_lc_carrier_cost(frame, data_dir=paths["data_dir"])
+    if COST_COL not in frame.columns or frame[COST_COL].null_count() == frame.height:
+        ep_cost = None
+        if endpoint:
+            ep_cost = endpoint.get("cost") or endpoint.get("carrier_shipment_charges_total")
+        if ep_cost is not None:
+            frame = frame.with_columns(pl.lit(float(ep_cost)).alias(COST_COL))
+
+    if etp50_avail is not None:
+        frame = frame.with_columns(pl.lit(float(etp50_avail)).alias("etp50_avail"))
+    elif "etp50_avail" not in frame.columns or frame["etp50_avail"].null_count() == frame.height:
+        return None
+
+    frame = _join_book_quotes_readonly(frame, paths)
+
+    timings: list[dict[str, Any]] = []
+    for timing, timing_label, col in (
+        ("avail", "Available", "etp50_avail"),
+        ("book", "At book", "etp50_book"),
+    ):
+        row = _score_pricing_slice(
+            frame,
+            col,
+            timing=timing,
+            timing_label=timing_label,
+            quote="etp50",
+            quote_label="ETP p50",
+            nominal=0.50,
+        )
+        if row:
+            timings.append(row)
+
+    if not timings:
+        return None
+
+    booked_on = frame["booked_on_utc"][0]
+    realized = frame[COST_COL][0] if COST_COL in frame.columns else None
+    return {
+        "covered": True,
+        "booked_on_utc": str(booked_on) if booked_on is not None else None,
+        "realized_cost_usd": float(realized) if realized is not None else None,
+        "timings": timings,
+    }
+
+
+def format_pricing_accuracy(pricing: dict[str, Any] | None) -> list[str]:
+    """Human-readable lines for CLI / notebook display."""
+    if not pricing:
+        return []
+    if not pricing.get("covered"):
+        reason = pricing.get("reason") or "unknown"
+        return [f"Pricing accuracy: skipped ({reason.replace('_', ' ')})"]
+
+    lines = ["Pricing accuracy (covered load):"]
+    realized = pricing.get("realized_cost_usd")
+    if realized is not None:
+        lines.append(f"  Realized cost: ${realized:,.0f}")
+    if pricing.get("booked_on_utc"):
+        lines.append(f"  Booked on: {pricing['booked_on_utc']}")
+
+    for row in pricing.get("timings") or []:
+        quote = row.get("mean_quote_usd")
+        mae = row.get("mae_usd")
+        att = row.get("attainment")
+        gap = row.get("gap_pp")
+        label = row.get("timing_label") or row.get("timing")
+        if quote is None or mae is None:
+            continue
+        att_s = f"{att * 100:.0f}%" if att is not None else "n/a"
+        gap_s = f"{gap:+.0f}pp" if gap is not None else "n/a"
+        lines.append(
+            f"  ETP p50 @ {label}: ${quote:,.0f} → MAE ${mae:,.0f} (att {att_s}, gap {gap_s})"
+        )
+    return lines
+
+
 def explain_load(
     lake: EtpLake,
     loadnumber: int,
@@ -700,6 +830,14 @@ def explain_load(
         lightning=lightning,
     )
     summary = summarize_load(payload, ledger, movement_row=movement_row)
+    endpoint_shifts = summary.get("endpoint_shifts") or {}
+    pricing_accuracy = pricing_accuracy_for_load(
+        loadnumber,
+        etp50_avail=endpoint_shifts.get("etp50_avail"),
+        data_dir=data_dir,
+        davis_cache=paths["davis"] if paths["davis"].is_file() else None,
+        endpoint=payload.get("endpoint"),
+    )
 
     return {
         "loadnumber": loadnumber,
@@ -710,6 +848,7 @@ def explain_load(
         "summary": summary,
         "movement": movement_row,
         "davis": davis_row,
+        "pricing_accuracy": pricing_accuracy,
     }
 
 
@@ -730,7 +869,9 @@ __all__ = [
     "attribution_card",
     "build_material_change_ledger",
     "explain_load",
+    "format_pricing_accuracy",
     "ledger_to_json",
+    "pricing_accuracy_for_load",
     "resolve_load_id",
     "select_outlier_cohort",
     "summarize_load",

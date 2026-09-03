@@ -24,6 +24,7 @@ from dqt.etp_lake import EtpLake
 from dqt.etp_lifecycle import (
     COHORT_HC,
     explain_load,
+    format_pricing_accuracy,
     ledger_to_json,
     resolve_load_id,
     select_outlier_cohort,
@@ -114,6 +115,11 @@ def main(argv: list[str] | None = None) -> int:
     if lt_n:
         print(f"  ledger Lightning rows: {lt_n}")
 
+    pricing_lines = format_pricing_accuracy(result.get("pricing_accuracy"))
+    if pricing_lines:
+        print()
+        print("\n".join(pricing_lines))
+
     if args.json_out:
         out_path = Path(args.json_out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -125,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
             "endpoint_shifts": summary["endpoint_shifts"],
             "movement": result.get("movement"),
             "lightning": result.get("lightning"),
+            "pricing_accuracy": result.get("pricing_accuracy"),
         }
         out_path.write_text(json.dumps(export, indent=2, default=str))
         logger.info("wrote {}", out_path)

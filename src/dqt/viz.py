@@ -105,6 +105,11 @@ def new_fig(w=9.0, h=4.5, nrows=1, ncols=1, **kw):
     return fig, ax
 
 
+def escape_mpl_text(text: str) -> str:
+    """Escape ``$`` so matplotlib does not parse dollar amounts as mathtext."""
+    return text.replace("$", r"\$")
+
+
 def titles(ax, title: str, subtitle: str | None = None) -> None:
     """Left-aligned title with an optional secondary-ink subtitle."""
     if subtitle:
@@ -112,7 +117,7 @@ def titles(ax, title: str, subtitle: str | None = None) -> None:
         ax.text(
             0,
             1.02,
-            subtitle,
+            escape_mpl_text(subtitle),
             transform=ax.transAxes,
             fontsize=9.5,
             color=INK_2,

@@ -14,6 +14,8 @@ from dqt.etp_lifecycle import (
     attribution_card,
     build_material_change_ledger,
     explain_load,
+    format_pricing_accuracy,
+    pricing_accuracy_for_load,
     select_outlier_cohort,
 )
 from dqt.etp_timeline import build_load_timeline
@@ -58,6 +60,37 @@ def test_attribution_card_excludes_display() -> None:
     card = attribution_card(ledger)
     assert len(card) == 1
     assert card[0]["category"] == "LeadtimeChange"
+
+
+def test_pricing_accuracy_not_booked() -> None:
+    out = pricing_accuracy_for_load(999999999, data_dir="/nonexistent")
+    assert out is None
+
+
+def test_format_pricing_accuracy_covered() -> None:
+    lines = format_pricing_accuracy(
+        {
+            "covered": True,
+            "realized_cost_usd": 1500.0,
+            "booked_on_utc": "2026-07-15",
+            "timings": [
+                {
+                    "timing_label": "Available",
+                    "mean_quote_usd": 612.0,
+                    "mae_usd": 888.0,
+                    "attainment": 0.0,
+                    "gap_pp": -50.0,
+                },
+            ],
+        }
+    )
+    assert any("MAE $888" in line for line in lines)
+
+
+def test_format_pricing_accuracy_not_booked() -> None:
+    lines = format_pricing_accuracy({"covered": False, "reason": "not_booked"})
+    assert len(lines) == 1
+    assert "not booked" in lines[0].lower()
 
 
 def _data_gate() -> Path:
@@ -111,6 +144,12 @@ def test_explain_load_9199475() -> None:
     summary = result["summary"]
     assert "9199475" in summary["one_liner"]
     assert summary["attribution_card"]
+
+    pricing = result.get("pricing_accuracy")
+    assert pricing and pricing.get("covered"), "expected covered-load pricing block"
+    timings = {row["timing"]: row for row in pricing["timings"]}
+    assert "avail" in timings and "book" in timings
+    assert timings["avail"]["mae_usd"] > timings["book"]["mae_usd"]
 
     payload = build_load_timeline(lake, load)
     assert payload["clock_events"], "clock_events should populate via feature_history"

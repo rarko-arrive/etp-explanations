@@ -1305,6 +1305,7 @@ class EtpLake:
         title: str | None = None,
         mde_cache: Path | str | None = None,
         query_mde: bool = False,
+        data_dir: Path | str | None = None,
     ) -> dict[str, Any]:
         """Model + audit display lifecycle with checkpoint inflections and MDE overlay."""
         from dqt.etp_timeline import plot_etp_timeline
@@ -1316,6 +1317,7 @@ class EtpLake:
             title=title,
             mde_cache=mde_cache,
             query_mde=query_mde,
+            data_dir=data_dir or self.paths.data_dir,
         )
 
     def build_etp_timeline(

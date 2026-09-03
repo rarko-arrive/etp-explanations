@@ -9,8 +9,10 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 
 from dqt.etp_mart import consecutive_feature_deltas
-from dqt.score.constants import ID_COL
-from dqt.viz import C_ETP, C_LIGHTNING, C_OTHER, DEEMPH, apply_style, titles
+from dqt.score.constants import COST_COL, ID_COL
+from dqt.viz import C_ETP, C_LIGHTNING, C_OTHER, DEEMPH, apply_style, escape_mpl_text, titles
+
+REALIZED_COST_COLOR = "#34495e"
 
 if TYPE_CHECKING:
     from dqt.etp_lake import EtpLake
@@ -389,6 +391,23 @@ def _checkpoint_display_table(
     return out.with_columns(exprs)
 
 
+def _attach_timeline_x(display: pl.DataFrame, checkpoints: pl.DataFrame) -> pl.DataFrame:
+    """Map checkpoints to a forward lifecycle x-coordinate (hours since available)."""
+    if "hours_since_available" not in display.columns:
+        return checkpoints.with_columns(pl.col("hours_before_pickup").alias("timeline_x"))
+    hsa_map = display.select("hours_before_pickup", "hours_since_available").unique(
+        "hours_before_pickup", keep="last"
+    )
+    avail_x = int(display["hours_since_available"].min())
+    cp = checkpoints.join(hsa_map, on="hours_before_pickup", how="left")
+    return cp.with_columns(
+        pl.when(pl.col("mark_hrs") == 999)
+        .then(pl.lit(avail_x))
+        .otherwise(pl.col("hours_since_available"))
+        .alias("timeline_x")
+    ).sort("timeline_x")
+
+
 def _clock_events(checkpoints: pl.DataFrame) -> list[dict[str, Any]]:
     if checkpoints.height < 2:
         return []
@@ -630,6 +649,44 @@ def build_load_timeline(
     }
 
 
+def _resolve_realized_cost(
+    loadnumber: int,
+    endpoint: dict[str, Any] | None,
+    *,
+    data_dir: Path | str | None = None,
+) -> float | None:
+    """Covered carrier cost from lake endpoint or features.parquet fallback."""
+    ep = endpoint or {}
+    for key in ("cost", "carrier_shipment_charges_total", COST_COL):
+        val = ep.get(key)
+        if val is None:
+            continue
+        try:
+            cost = float(val)
+        except (TypeError, ValueError):
+            continue
+        if cost > 0:
+            return cost
+
+    from dqt import resolve_data_dir
+    from dqt.etp_slider.problem_loads.leadtime import join_lc_carrier_cost
+
+    frame = join_lc_carrier_cost(
+        pl.DataFrame({ID_COL: [loadnumber]}),
+        data_dir=resolve_data_dir(data_dir),
+    )
+    if COST_COL not in frame.columns or frame[COST_COL].null_count() == frame.height:
+        return None
+    cost = frame[COST_COL][0]
+    if cost is None:
+        return None
+    try:
+        out = float(cost)
+    except (TypeError, ValueError):
+        return None
+    return out if out > 0 else None
+
+
 def plot_etp_timeline(
     lake: EtpLake,
     loadnumber: int,
@@ -638,6 +695,7 @@ def plot_etp_timeline(
     title: str | None = None,
     mde_cache: Path | str | None = None,
     query_mde: bool = False,
+    data_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Plot model ETP + audit display targets with checkpoint inflections."""
     import matplotlib.pyplot as plt
@@ -650,6 +708,19 @@ def plot_etp_timeline(
     if display.is_empty() or checkpoints.is_empty():
         raise ValueError(f"Insufficient timeline data for load {loadnumber}")
 
+    plot_display = (
+        display.sort("hours_since_available")
+        if "hours_since_available" in display.columns
+        else display.sort("hours_before_pickup", descending=True)
+    )
+    x_col = (
+        "hours_since_available"
+        if "hours_since_available" in plot_display.columns
+        else "hours_before_pickup"
+    )
+    cp = _attach_timeline_x(display, checkpoints).sort("timeline_x")
+    x = plot_display[x_col].to_list()
+
     apply_style()
     fig, (ax1, ax2) = plt.subplots(
         2,
@@ -659,34 +730,41 @@ def plot_etp_timeline(
         gridspec_kw={"height_ratios": [2.4, 1.2], "hspace": 0.08},
     )
 
-    x = display["hours_before_pickup"].to_list()
-    ax1.plot(x, display["etp50"].to_list(), color=C_ETP, linewidth=2.2, marker=".", markersize=4, label="Model ETP50")
-    if "target3" in display.columns and display["target3"].null_count() < display.height:
+    ax1.plot(x, plot_display["etp50"].to_list(), color=C_ETP, linewidth=2.2, marker=".", markersize=4, label="Model ETP50")
+    if "target3" in plot_display.columns and plot_display["target3"].null_count() < plot_display.height:
         ax1.plot(
             x,
-            display["target3"].to_list(),
+            plot_display["target3"].to_list(),
             color=C_LIGHTNING,
             linewidth=1.8,
             linestyle="-",
             alpha=0.9,
             label="Audit Target 3 (display)",
         )
-    if "target1" in display.columns and display["target1"].null_count() < display.height:
+    if "target1" in plot_display.columns and plot_display["target1"].null_count() < plot_display.height:
         ax1.plot(
             x,
-            display["target1"].to_list(),
+            plot_display["target1"].to_list(),
             color=C_OTHER,
             linewidth=1.8,
             linestyle="--",
             alpha=0.9,
             label="Audit Target 1 (display)",
         )
-    ax1.invert_xaxis()
 
-    ep = payload.get("endpoint") or {}
-    cost = ep.get("cost") or ep.get("carrier_shipment_charges_total")
-    if cost is not None:
-        ax1.axhline(float(cost), color=DEEMPH, linestyle=":", linewidth=1.2, label="Realized cost")
+    realized_cost = _resolve_realized_cost(
+        loadnumber, payload.get("endpoint"), data_dir=data_dir
+    )
+    if realized_cost is not None:
+        ax1.axhline(
+            realized_cost,
+            color=REALIZED_COST_COLOR,
+            linestyle=(0, (6, 4)),
+            linewidth=2.0,
+            label=escape_mpl_text(f"Covered carrier cost (${realized_cost:,.0f})"),
+            zorder=2,
+        )
+        payload.setdefault("summary", {})["realized_cost_usd"] = realized_cost
 
     sm = payload["summary"]
     mde_note = "no MDE" if not sm.get("mde", {}).get("n_events") else f"{sm['mde']['n_events']} MDE"
@@ -694,22 +772,29 @@ def plot_etp_timeline(
         gap_note = ""
         if sm.get("t1_gap_mean") is not None:
             gap_note = f" · T1 display avg {sm['t1_gap_mean']:+,.0f} vs model"
-        subtitle = (
-            f"model avail→48hr: ${sm['shift_amt']:+,.0f} ({sm['shift_pct'] * 100:+.1f}%){gap_note}  ·  {mde_note}"
+        cost_note = (
+            f" · covered cost ${realized_cost:,.0f}"
+            if realized_cost is not None
+            else ""
         )
+        subtitle = (
+            f"model avail→48hr: ${sm['shift_amt']:+,.0f} ({sm['shift_pct'] * 100:+.1f}%){gap_note}{cost_note}  ·  {mde_note}"
+        )
+    elif realized_cost is not None:
+        subtitle = f"covered carrier cost ${realized_cost:,.0f}  ·  {mde_note}"
     else:
         subtitle = mde_note
     titles(ax1, title or f"Load {loadnumber} — model vs display lifecycle", subtitle)
 
     impact_by_mark = {e["mark_hrs"]: e for e in payload["etp_impacts"]}
-    for row in checkpoints.iter_rows(named=True):
-        hbp = int(row["hours_before_pickup"])
-        ax1.axvline(hbp, color=DEEMPH, linestyle=":", linewidth=0.9, alpha=0.7)
+    for row in cp.iter_rows(named=True):
+        tx = float(row["timeline_x"])
+        ax1.axvline(tx, color=DEEMPH, linestyle=":", linewidth=0.9, alpha=0.7)
         impact = impact_by_mark.get(int(row["mark_hrs"]))
         if impact:
             ax1.annotate(
-                impact["text"],
-                xy=(hbp, float(row["etp50"])),
+                escape_mpl_text(impact["text"]),
+                xy=(tx, float(row["etp50"])),
                 xytext=(0, 10),
                 textcoords="offset points",
                 ha="center",
@@ -718,22 +803,22 @@ def plot_etp_timeline(
                 fontweight="semibold",
             )
 
-    cp_x = checkpoints["hours_before_pickup"].to_list()
-    ax2.plot(cp_x, checkpoints["etp50_idx"].to_list(), "s-", color=C_ETP, linewidth=2, markersize=5, label="Model ETP50 idx")
-    if "target3_idx" in checkpoints.columns:
+    cp_x = cp["timeline_x"].to_list()
+    ax2.plot(cp_x, cp["etp50_idx"].to_list(), "s-", color=C_ETP, linewidth=2, markersize=5, label="Model ETP50 idx")
+    if "target3_idx" in cp.columns:
         ax2.plot(
             cp_x,
-            checkpoints["target3_idx"].to_list(),
+            cp["target3_idx"].to_list(),
             "o--",
             color=C_LIGHTNING,
             linewidth=1.8,
             markersize=4,
             label="Target 3 idx",
         )
-    if "target1_idx" in checkpoints.columns:
+    if "target1_idx" in cp.columns:
         ax2.plot(
             cp_x,
-            checkpoints["target1_idx"].to_list(),
+            cp["target1_idx"].to_list(),
             "^--",
             color=C_OTHER,
             linewidth=1.8,
@@ -742,8 +827,12 @@ def plot_etp_timeline(
         )
     ax2.axhline(100, color=DEEMPH, linestyle="--", alpha=0.6)
     ax2.set_ylabel("Index (avail=100)")
-    ax2.set_xlabel("Hours before pickup (→ pickup)")
-    ax2.invert_xaxis()
+    x_label = (
+        "Hours since available (→ pickup)"
+        if x_col == "hours_since_available"
+        else "Lifecycle checkpoint (Available → pickup)"
+    )
+    ax2.set_xlabel(x_label)
 
     events = (
         payload["feature_events"]
@@ -751,13 +840,14 @@ def plot_etp_timeline(
         + payload["display_events"]
         + payload["mde_events"]
     )
+    mark_x = {int(r["mark_hrs"]): float(r["timeline_x"]) for r in cp.iter_rows(named=True)}
     y_cursor = 0.0
-    for ev in sorted(events, key=lambda e: e["mark_hrs"], reverse=True):
+    for ev in sorted(events, key=lambda e: mark_x.get(int(e["mark_hrs"]), 0.0)):
         mark = int(ev["mark_hrs"])
-        cp_row = checkpoints.filter(pl.col("mark_hrs") == mark)
+        cp_row = cp.filter(pl.col("mark_hrs") == mark)
         if cp_row.is_empty():
             continue
-        hbp = int(cp_row["hours_before_pickup"][0])
+        tx = float(cp_row["timeline_x"][0])
         idx = float(cp_row["etp50_idx"][0])
         color = "#52514e"
         if ev.get("category") == "MDE":
@@ -766,8 +856,8 @@ def plot_etp_timeline(
             color = C_LIGHTNING
         y_cursor = max(y_cursor, idx + 4)
         ax2.annotate(
-            ev["text"],
-            xy=(hbp, idx),
+            escape_mpl_text(ev["text"]),
+            xy=(tx, idx),
             xytext=(0, 8 + (y_cursor - idx) * 0.12),
             textcoords="offset points",
             ha="center",
@@ -776,9 +866,8 @@ def plot_etp_timeline(
             rotation=35,
         )
 
-    tick_rows = checkpoints.sort("hours_before_pickup", descending=True)
-    ax2.set_xticks(tick_rows["hours_before_pickup"].to_list())
-    ax2.set_xticklabels(tick_rows["mark_label"].to_list(), rotation=35, ha="right")
+    ax2.set_xticks(cp["timeline_x"].to_list())
+    ax2.set_xticklabels(cp["mark_label"].to_list(), rotation=35, ha="right")
     ax1.legend(loc="upper left", fontsize=9)
     ax2.legend(loc="upper left", fontsize=9)
     fig.tight_layout()
@@ -789,4 +878,12 @@ def plot_etp_timeline(
     return payload
 
 
-__all__ = ["DISPLAY_METRICS", "MARK_HRS", "MARK_LABELS", "build_load_timeline", "plot_etp_timeline"]
+__all__ = [
+    "DISPLAY_METRICS",
+    "MARK_HRS",
+    "MARK_LABELS",
+    "REALIZED_COST_COLOR",
+    "build_load_timeline",
+    "plot_etp_timeline",
+    "_resolve_realized_cost",
+]
