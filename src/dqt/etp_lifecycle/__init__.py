@@ -19,9 +19,12 @@ from dqt.etp_lifecycle.lightning import (
     DEFAULT_ABS_USD,
     DEFAULT_LIGHTNING_COL,
     DEFAULT_REL_PCT,
+    aggregate_clhp_misses_weekly,
+    build_clhp_miss_frame,
     build_lightning_calibration_frame,
     build_lightning_tracking,
     enrich_endpoint_lightning,
+    summarize_clhp_miss_context,
     sweep_lightning_thresholds,
 )
 
@@ -36,6 +39,8 @@ __all__ = [
     "DEFAULT_REL_PCT",
     "LEDGER_COLUMNS",
     "attribution_card",
+    "aggregate_clhp_misses_weekly",
+    "build_clhp_miss_frame",
     "build_lightning_calibration_frame",
     "build_lightning_tracking",
     "build_material_change_ledger",
@@ -45,5 +50,6 @@ __all__ = [
     "resolve_load_id",
     "select_outlier_cohort",
     "summarize_load",
+    "summarize_clhp_miss_context",
     "sweep_lightning_thresholds",
 ]

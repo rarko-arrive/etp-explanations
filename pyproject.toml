@@ -5,6 +5,7 @@ description = "ETP shipment lifecycle explanations — material change ledger an
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "altair>=6.2.2",
     "arriveds[azure]",
     "ipykernel>=7.3.0",
     "matplotlib>=3.8.0",

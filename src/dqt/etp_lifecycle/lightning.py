@@ -125,6 +125,151 @@ def build_lightning_calibration_frame(
     return frame.select(out_cols)
 
 
+def clhp_miss_driver_expr() -> pl.Expr:
+    """Why a ShipmentChange-labeled load missed the CLHP Lightning gate."""
+    charge = pl.col("charge_inc_ind").fill_null(0) == 1
+    equip = pl.col("equip_change_ind").fill_null(0) == 1
+    clocks = pl.col("clocks_moved_ind").fill_null(0) == 1
+    return (
+        pl.when(charge & equip)
+        .then(pl.lit("charge_and_equip"))
+        .when(charge)
+        .then(pl.lit("charge_inc"))
+        .when(equip)
+        .then(pl.lit("equip"))
+        .when(clocks)
+        .then(pl.lit("clocks_only_label_drift"))
+        .otherwise(pl.lit("other"))
+    )
+
+
+def join_mde_context(
+    df: pl.DataFrame,
+    mde_events: pl.DataFrame | None,
+    *,
+    id_col: str = ID_COL,
+) -> pl.DataFrame:
+    """Add ``mde_applied_ind`` and ``n_mde_events`` from timeline event rows."""
+    if df.is_empty():
+        return df.with_columns(
+            pl.lit(0).cast(pl.Int8).alias("mde_applied_ind"),
+            pl.lit(0).cast(pl.UInt32).alias("n_mde_events"),
+        )
+    if mde_events is None or mde_events.is_empty() or id_col not in mde_events.columns:
+        return df.with_columns(
+            pl.lit(0).cast(pl.Int8).alias("mde_applied_ind"),
+            pl.lit(0).cast(pl.UInt32).alias("n_mde_events"),
+        )
+
+    from dqt.etp_slider.drift.mde_timeline import aggregate_mde_events_by_load
+
+    agg = aggregate_mde_events_by_load(mde_events)
+    out = df.drop([c for c in ("mde_applied_ind", "n_mde_events") if c in df.columns], strict=False).join(
+        agg.rename({"mde_timeline_ind": "mde_applied_ind", "n_mde_timeline_events": "n_mde_events"}),
+        on=id_col,
+        how="left",
+    )
+    return out.with_columns(
+        pl.col("mde_applied_ind").fill_null(0).cast(pl.Int8),
+        pl.col("n_mde_events").fill_null(0).cast(pl.UInt32),
+    )
+
+
+def build_clhp_miss_frame(
+    davis: pl.DataFrame,
+    labeled: pl.DataFrame | None = None,
+    *,
+    value_col: str = DEFAULT_LIGHTNING_COL,
+    mde_events: pl.DataFrame | None = None,
+    time_col: str = "made_available_utc",
+) -> pl.DataFrame:
+    """ShipmentChange loads that missed the CLHP gate, with miss-driver and context flags."""
+    if davis.is_empty():
+        return pl.DataFrame()
+
+    enriched = enrich_endpoint_lightning(davis)
+    cal = build_lightning_calibration_frame(davis, labeled, value_col=value_col)
+    flag_cols = [
+        c
+        for c in (
+            "charge_inc_ind",
+            "equip_change_ind",
+            "clocks_moved_ind",
+            "index_change_ind",
+            "hard_ft_inc_ind",
+            time_col,
+            "ship_date",
+            "pickup_appt_latest_utc",
+        )
+        if c in enriched.columns
+    ]
+    miss = (
+        cal.filter((pl.col("primary_category") == "ShipmentChange") & (pl.col("clhp_change_ind") == 0))
+        .join(enriched.select([ID_COL, *flag_cols]), on=ID_COL, how="left")
+        .with_columns(clhp_miss_driver_expr().alias("miss_driver"))
+    )
+    if time_col not in miss.columns and "ship_date" in miss.columns:
+        miss = miss.with_columns(pl.col("ship_date").alias(time_col))
+
+    from dqt.holidays import tag_holiday_windows
+
+    miss = tag_holiday_windows(miss, time_col)
+    miss = join_mde_context(miss, mde_events)
+    miss = miss.with_columns(
+        pl.col(time_col).dt.truncate("1w").alias("week"),
+        pl.col("mde_applied_ind").fill_null(0).cast(pl.Int8).alias("mde_context"),
+    )
+    return miss.with_columns(
+        pl.when(pl.col("in_holiday_window"))
+        .then(pl.lit("holiday_window"))
+        .when(pl.col("mde_context") == 1)
+        .then(pl.lit("mde_applied"))
+        .otherwise(pl.lit("normal"))
+        .alias("event_context"),
+    )
+
+
+def aggregate_clhp_misses_weekly(miss: pl.DataFrame) -> pl.DataFrame:
+    """Weekly stacked counts by ``miss_driver``."""
+    if miss.is_empty() or "week" not in miss.columns:
+        return pl.DataFrame()
+    return (
+        miss.group_by("week", "miss_driver")
+        .len()
+        .rename({"len": "n"})
+        .sort("week", "miss_driver")
+    )
+
+
+def summarize_clhp_miss_context(miss: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Miss counts by context, plus cross-tab of context × miss_driver."""
+    if miss.is_empty():
+        return pl.DataFrame()
+    total = miss.height
+    rows: list[dict[str, object]] = []
+    for ctx in ("holiday_window", "mde_applied", "normal"):
+        if ctx == "holiday_window":
+            sub = miss.filter(pl.col("in_holiday_window"))
+        elif ctx == "mde_applied":
+            sub = miss.filter(pl.col("mde_applied_ind") == 1)
+        else:
+            sub = miss.filter(~pl.col("in_holiday_window") & (pl.col("mde_applied_ind") == 0))
+        rows.append(
+            {
+                "context": ctx,
+                "n_misses": sub.height,
+                "pct_of_misses": sub.height / total if total else None,
+            }
+        )
+    by_driver = (
+        miss.group_by("event_context", "miss_driver")
+        .len()
+        .rename({"len": "n"})
+        .sort("event_context", "miss_driver")
+    )
+    return pl.DataFrame(rows), by_driver
+
+
 def sweep_lightning_thresholds(
     frame: pl.DataFrame,
     *,
@@ -385,14 +530,19 @@ __all__ = [
     "DEFAULT_LIGHTNING_COL",
     "DEFAULT_REL_PCT",
     "LIGHTNING_VALUE_COLS",
+    "aggregate_clhp_misses_weekly",
+    "build_clhp_miss_frame",
     "build_lightning_calibration_frame",
     "build_lightning_tracking",
+    "clhp_miss_driver_expr",
     "enrich_endpoint_lightning",
     "flag_lightning_endpoint",
+    "join_mde_context",
     "lightning_column_specs",
     "lightning_endpoint_events",
     "lightning_events_from_deltas",
     "lightning_material_expr",
     "lightning_path_checkpoint_events",
+    "summarize_clhp_miss_context",
     "sweep_lightning_thresholds",
 ]
