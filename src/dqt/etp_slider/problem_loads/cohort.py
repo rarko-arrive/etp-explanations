@@ -119,19 +119,14 @@ def build_labeled_cohort(
         labeled = labeled.with_columns(pl.lit("Unclassified").alias("primary_category"))
 
     labeled = _normalize_category_col(labeled).with_columns(
-        pl.when(pl.col("is_tail"))
-        .then(pl.lit("problem"))
-        .otherwise(pl.lit("stable"))
-        .alias("shift_segment"),
+        pl.when(pl.col("is_tail")).then(pl.lit("problem")).otherwise(pl.lit("stable")).alias("shift_segment"),
         pl.col("primary_category").replace(CATEGORY_LABELS).alias("category_label"),
     )
 
     if with_checkpoints and (hist is not None or hist_path is not None):
         if hist is None:
             hist = pl.read_parquet(hist_path)
-        checkpoints = per_load_checkpoint_shifts(
-            hist, labeled.select("loadnumber"), marks=ARCHETYPE_PATH_MARKS
-        )
+        checkpoints = per_load_checkpoint_shifts(hist, labeled.select("loadnumber"), marks=ARCHETYPE_PATH_MARKS)
         labeled = labeled.join(checkpoints, on="loadnumber", how="left")
 
     return labeled
@@ -197,16 +192,13 @@ def category_comparison(labeled: pl.DataFrame) -> pl.DataFrame:
     parent_avg_amt = float(labeled["etp50_shift_amt"].mean() or 0)
 
     problem = labeled.filter(pl.col("is_tail"))
-    stats = (
-        problem.group_by("primary_category")
-        .agg(
-            pl.len().alias("n_loads"),
-            pl.col("etp50_shift_amt").mean().alias("avg_shift_amt"),
-            pl.col("etp50_shift_amt").median().alias("med_shift_amt"),
-            pl.col("etp50_shift_pct").mean().alias("avg_shift_pct"),
-            pl.col("etp50_shift_pct").median().alias("med_shift_pct"),
-            pl.col("etp50_shift_amt").quantile(0.75).alias("p75_shift_amt"),
-        )
+    stats = problem.group_by("primary_category").agg(
+        pl.len().alias("n_loads"),
+        pl.col("etp50_shift_amt").mean().alias("avg_shift_amt"),
+        pl.col("etp50_shift_amt").median().alias("med_shift_amt"),
+        pl.col("etp50_shift_pct").mean().alias("avg_shift_pct"),
+        pl.col("etp50_shift_pct").median().alias("med_shift_pct"),
+        pl.col("etp50_shift_amt").quantile(0.75).alias("p75_shift_amt"),
     )
     by_cat = {r["primary_category"]: r for r in stats.iter_rows(named=True)}
     rows: list[dict[str, Any]] = []
@@ -270,10 +262,7 @@ def segment_by_category_overview(labeled: pl.DataFrame) -> pl.DataFrame:
     n_parent = labeled.height
     cat_sizes = {
         r["primary_category"]: int(r["n_category"])
-        for r in labeled.group_by("primary_category")
-        .len()
-        .rename({"len": "n_category"})
-        .iter_rows(named=True)
+        for r in labeled.group_by("primary_category").len().rename({"len": "n_category"}).iter_rows(named=True)
     }
     present = set(cat_sizes)
     categories = [c for c in CATEGORY_ORDER if c in present]
@@ -415,24 +404,28 @@ def render_executive_markdown(summary: dict[str, Any]) -> str:
         f"{_amt(r.get('p75_shift_amt'))} |"
         for r in overview.iter_rows(named=True)
     )
-    pivot_lines = "\n".join(
-        f"| {r['category_label']} | {int(r.get('n_parent', 0)):,} | {_amt(r.get('avg_amt_parent'))} | "
-        f"{int(r.get('n_problem', 0)):,} | {_amt(r.get('avg_amt_problem'))} | "
-        f"{int(r.get('n_stable', 0)):,} | {_amt(r.get('avg_amt_stable'))} | {_pct(r.get('pct_category_problem'))} |"
-        for r in pivot.iter_rows(named=True)
-    ) if not pivot.is_empty() else ""
+    pivot_lines = (
+        "\n".join(
+            f"| {r['category_label']} | {int(r.get('n_parent', 0)):,} | {_amt(r.get('avg_amt_parent'))} | "
+            f"{int(r.get('n_problem', 0)):,} | {_amt(r.get('avg_amt_problem'))} | "
+            f"{int(r.get('n_stable', 0)):,} | {_amt(r.get('avg_amt_stable'))} | {_pct(r.get('pct_category_problem'))} |"
+            for r in pivot.iter_rows(named=True)
+        )
+        if not pivot.is_empty()
+        else ""
+    )
     return f"""# ETP Drift — Executive Summary
 
-**Cohort:** {h['cohort_rule']}  
-**Problem-load gate:** {h['problem_rule']}
+**Cohort:** {h["cohort_rule"]}
+**Problem-load gate:** {h["problem_rule"]}
 
 ## Headline
 
-- **{h['n_parent']:,}** long-lead shipments in window; **{h['n_problem']:,}** ({_pct(h['pct_problem_of_parent'])}) exceed the problem-load threshold.
-- **Whole cohort** avg ETP50 drift: {_pct(h['parent_avg_shift_pct'])} / {_amt(h['parent_avg_shift_amt'])}.
-- **Stable** (&lt; threshold): {_pct(h['stable_avg_shift_pct'])} / {_amt(h['stable_avg_shift_amt'])}.
-- **Problem** (≥ threshold): {_pct(h['problem_avg_shift_pct'])} / {_amt(h['problem_avg_shift_amt'])}.
-- **Lead Time Change** (primary label on problem loads): **{h['leadtime_change_n']:,}** loads, avg {_amt(h['leadtime_change_avg_amt'])}.
+- **{h["n_parent"]:,}** long-lead shipments in window; **{h["n_problem"]:,}** ({_pct(h["pct_problem_of_parent"])}) exceed the problem-load threshold.
+- **Whole cohort** avg ETP50 drift: {_pct(h["parent_avg_shift_pct"])} / {_amt(h["parent_avg_shift_amt"])}.
+- **Stable** (&lt; threshold): {_pct(h["stable_avg_shift_pct"])} / {_amt(h["stable_avg_shift_amt"])}.
+- **Problem** (≥ threshold): {_pct(h["problem_avg_shift_pct"])} / {_amt(h["problem_avg_shift_amt"])}.
+- **Lead Time Change** (primary label on problem loads): **{h["leadtime_change_n"]:,}** loads, avg {_amt(h["leadtime_change_avg_amt"])}.
 
 ## Segment comparison
 
@@ -444,7 +437,7 @@ def render_executive_markdown(summary: dict[str, Any]) -> str:
 
 | Category | Parent n | Parent avg $ | Problem n | Problem avg $ | Stable n | Stable avg $ | % of label ≥10% |
 |----------|--------:|-------------:|----------:|--------------:|---------:|-------------:|----------------:|
-{pivot_lines or '| — | — | — | — | — | — | — | — |'}
+{pivot_lines or "| — | — | — | — | — | — | — | — |"}
 
 *Within each movement label, **% of label ≥10%** = share of that label's loads that exceed the problem threshold.*
 
@@ -583,9 +576,7 @@ def summarize_cohort_universe_counts(
     ship_days = (ship_end - ship_start).days + 1
     by_status = counts.sort("n_loads", descending=True).to_dicts()
     n_all = int(counts["n_loads"].sum())
-    n_covered = int(
-        counts.filter(pl.col("order_status_group").str.to_lowercase() == "covered")["n_loads"].sum()
-    )
+    n_covered = int(counts.filter(pl.col("order_status_group").str.to_lowercase() == "covered")["n_loads"].sum())
     daily_all = round(n_all / ship_days) if ship_days else 0
     daily_covered = round(n_covered / ship_days) if ship_days else 0
     return {
@@ -611,16 +602,12 @@ def load_cohort_universe_summary(
     if path is None:
         if data_dir is None:
             return None
-        path = cohort_universe_cache_path(
-            data_dir, ship_date_start=ship_date_start, ship_date_end=ship_date_end
-        )
+        path = cohort_universe_cache_path(data_dir, ship_date_start=ship_date_start, ship_date_end=ship_date_end)
     path = Path(path)
     if not path.exists():
         return None
     counts = pl.read_parquet(path)
-    return summarize_cohort_universe_counts(
-        counts, ship_date_start=ship_date_start, ship_date_end=ship_date_end
-    )
+    return summarize_cohort_universe_counts(counts, ship_date_start=ship_date_start, ship_date_end=ship_date_end)
 
 
 def write_cohort_universe_cache(
@@ -634,9 +621,7 @@ def write_cohort_universe_cache(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     counts.write_parquet(path)
-    return summarize_cohort_universe_counts(
-        counts, ship_date_start=ship_date_start, ship_date_end=ship_date_end
-    )
+    return summarize_cohort_universe_counts(counts, ship_date_start=ship_date_start, ship_date_end=ship_date_end)
 
 
 def build_cohort_funnel(
@@ -673,7 +658,9 @@ def build_cohort_funnel(
     daily_company = (
         int(universe_summary["daily_all_moves"])
         if use_universe
-        else round(n_company_mid / ship_days) if ship_days else 0
+        else round(n_company_mid / ship_days)
+        if ship_days
+        else 0
     )
     n_covered = int(universe_summary.get("n_covered") or 0) if use_universe else None
     daily_covered = int(universe_summary.get("daily_covered") or 0) if use_universe else None

@@ -46,9 +46,7 @@ def movement_overlap_summary(
         rows.append(_overlap_row(key, label, sub, n))
 
     if "index_change_ind" in df.columns and "clocks_moved_ind" in df.columns:
-        neither = df.filter(
-            (pl.col("index_change_ind") == 0) & (pl.col("clocks_moved_ind") == 0)
-        )
+        neither = df.filter((pl.col("index_change_ind") == 0) & (pl.col("clocks_moved_ind") == 0))
         if neither.height:
             rows.append(_overlap_row("neither", "Neither index nor clocks", neither, n))
 
@@ -73,9 +71,7 @@ def movement_overlap_by_primary(df: pl.DataFrame) -> pl.DataFrame:
         sub = df.filter(pl.col(col) == 1)
         if sub.is_empty():
             continue
-        for cat, cnt in (
-            sub.group_by("primary_category").len().iter_rows()
-        ):
+        for cat, cnt in sub.group_by("primary_category").len().iter_rows():
             rows.append(
                 {
                     "overlap_segment": key,
@@ -156,9 +152,7 @@ def _overlap_row(key: str, label: str, sub: pl.DataFrame, n: int) -> dict[str, A
         else None,
         "pct_leadtime_primary": round(
             float(
-                sub.filter(
-                    pl.col("primary_category").is_in(["LeadtimeChange", "DeterministicChange"])
-                ).height
+                sub.filter(pl.col("primary_category").is_in(["LeadtimeChange", "DeterministicChange"])).height
                 / sub.height
             ),
             4,
@@ -198,9 +192,7 @@ def _multivariate_ols(
     ]
     x_std = x.std(axis=0)
     y_std = float(y.std())
-    for i, (col, label) in enumerate(
-        pair for pair in MOVEMENT_SHIFT_FEATURES if pair[0] in features
-    ):
+    for i, (col, label) in enumerate(pair for pair in MOVEMENT_SHIFT_FEATURES if pair[0] in features):
         coef = float(beta[i + 1])
         std_beta = (coef * x_std[i] / y_std) if y_std > 0 and x_std[i] > 0 else None
         rows.append(

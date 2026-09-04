@@ -58,8 +58,8 @@ def build_view_model(
         pricing_rows: list[dict[str, Any]] = []
         display_rows: list[dict[str, Any]] = []
     else:
-        pricing_rows = ledger_to_json(ledger.filter(pl.col("is_pricing_driver") == True))
-        display_rows = ledger_to_json(ledger.filter(pl.col("is_pricing_driver") == False))
+        pricing_rows = ledger_to_json(ledger.filter(pl.col("is_pricing_driver")))
+        display_rows = ledger_to_json(ledger.filter(~pl.col("is_pricing_driver")))
 
     checkpoints = payload.get("checkpoints")
     if not isinstance(checkpoints, pl.DataFrame):

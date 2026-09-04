@@ -8,7 +8,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import polars as pl
-import pytest
 
 from app.explain.render import render_explain_html
 from app.explain.view_model import build_view_model, figure_to_png_b64

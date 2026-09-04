@@ -18,7 +18,6 @@ dfh = pl.scan_parquet(path_hyperlocal)
 logger.info(f"hyperlocal decomposition with {frame_shape(dfh)} shape at {path_hyperlocal}")
 
 
-
 import polars as pl
 
 hyp = pl.read_parquet("data/etp_lake/mart/feature_impact/hypothesis_summary.parquet")
@@ -32,7 +31,6 @@ tests.filter(
 
 events = pl.read_parquet("data/etp_lake/mart/feature_impact/cat2_events.parquet")
 events.group_by("event_feature").len().sort("len", descending=True)
-
 
 
 ## Impact Analysis

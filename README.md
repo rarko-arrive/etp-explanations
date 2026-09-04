@@ -11,6 +11,7 @@ cd ~/Git/Projects/etp/etp-explanations
 cp .env.example .env
 make install
 make test
+make pre-commit   # optional: verify hooks pass on full repo
 ```
 
 ## Prerequisites (data)

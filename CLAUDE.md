@@ -9,6 +9,7 @@ make install && make test
 make explain LOAD=9199475
 make explain-ui LOAD=6963033   # → data/explain-shipments/explain-6963033.html
 make explain-serve             # http://127.0.0.1:8765
+make pre-commit                # run all git hooks on full repo
 # notebook: notebooks/etp-shipment-lifecyle.ipynb
 ```
 

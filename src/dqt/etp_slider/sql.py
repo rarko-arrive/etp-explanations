@@ -74,9 +74,7 @@ def _join_cte_tail(
     sql_dir: Path,
 ) -> str:
     tail = (sql_dir / tail_name).read_text().strip()
-    tail_body = "\n".join(
-        line for line in tail.splitlines() if not line.startswith("--")
-    ).strip()
+    tail_body = "\n".join(line for line in tail.splitlines() if not line.startswith("--")).strip()
     return f"{cte_text}\n\n{tail_body}"
 
 

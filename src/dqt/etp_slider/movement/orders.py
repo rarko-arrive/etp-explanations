@@ -88,9 +88,7 @@ def enrich_movement_flags(df: pl.DataFrame) -> pl.DataFrame:
     out = df.with_columns(
         charge_inc_ind=(charges > 50).cast(pl.Int8),
         hard_ft_inc_ind=(hard_ft.abs() >= 1).cast(pl.Int8),
-        clocks_moved_ind=(
-            book_2_pkup.abs().ge(CLOCK_DELTA_MIN) | avail_2_book.abs().ge(CLOCK_DELTA_MIN)
-        ).cast(pl.Int8),
+        clocks_moved_ind=(book_2_pkup.abs().ge(CLOCK_DELTA_MIN) | avail_2_book.abs().ge(CLOCK_DELTA_MIN)).cast(pl.Int8),
     )
     if "equipment_type_avail" in out.columns and "equipment_type_48hr" in out.columns:
         out = out.with_columns(
@@ -115,9 +113,7 @@ def enrich_movement_flags(df: pl.DataFrame) -> pl.DataFrame:
             part = part | index_delta_fired_expr(delta_col, avail_col)
         clhp_parts.append(part)
     if clhp_parts:
-        out = out.with_columns(
-            pl.any_horizontal(clhp_parts).cast(pl.Int8).alias("clhp_change_ind")
-        )
+        out = out.with_columns(pl.any_horizontal(clhp_parts).cast(pl.Int8).alias("clhp_change_ind"))
     else:
         out = out.with_columns(pl.lit(0).cast(pl.Int8).alias("clhp_change_ind"))
 
@@ -139,9 +135,7 @@ def enrich_movement_flags(df: pl.DataFrame) -> pl.DataFrame:
             index_parts.append(index_delta_fired_expr(delta_col, avail_col))
 
     if index_parts:
-        out = out.with_columns(
-            pl.any_horizontal(index_parts).cast(pl.Int8).alias("index_change_ind")
-        )
+        out = out.with_columns(pl.any_horizontal(index_parts).cast(pl.Int8).alias("index_change_ind"))
     else:
         out = out.with_columns(pl.lit(0).cast(pl.Int8).alias("index_change_ind"))
 
@@ -156,16 +150,10 @@ def enrich_movement_flags(df: pl.DataFrame) -> pl.DataFrame:
         )
         .cast(pl.Int8)
         .alias("leadtime_isolated_ind"),
-        (
-            (pl.col("clocks_moved_ind") == 1) & (pl.col("index_change_ind") == 1)
-        )
+        ((pl.col("clocks_moved_ind") == 1) & (pl.col("index_change_ind") == 1))
         .cast(pl.Int8)
         .alias("index_clock_overlap_ind"),
-        (
-            (pl.col("index_change_ind") == 1) & (pl.col("clocks_moved_ind") == 0)
-        )
-        .cast(pl.Int8)
-        .alias("index_only_ind"),
+        ((pl.col("index_change_ind") == 1) & (pl.col("clocks_moved_ind") == 0)).cast(pl.Int8).alias("index_only_ind"),
     )
     return out
 
@@ -176,11 +164,7 @@ def refresh_movement_derived_flags(df: pl.DataFrame) -> pl.DataFrame:
     need = {"clocks_moved_ind", "charge_inc_ind", "hard_ft_inc_ind", "equip_change_ind", "clhp_change_ind"}
     if not need.issubset(set(out.columns)):
         return out
-    index_change = (
-        pl.col("index_change_ind") == 1
-        if "index_change_ind" in out.columns
-        else pl.lit(False)
-    )
+    index_change = pl.col("index_change_ind") == 1 if "index_change_ind" in out.columns else pl.lit(False)
     out = out.with_columns(
         (
             (pl.col("clocks_moved_ind") == 1)
@@ -201,9 +185,7 @@ def refresh_movement_derived_flags(df: pl.DataFrame) -> pl.DataFrame:
         )
         .cast(pl.Int8)
         .alias("leadtime_isolated_ind"),
-        ((pl.col("clocks_moved_ind") == 1) & index_change)
-        .cast(pl.Int8)
-        .alias("index_clock_overlap_ind"),
+        ((pl.col("clocks_moved_ind") == 1) & index_change).cast(pl.Int8).alias("index_clock_overlap_ind"),
     )
     return out
 
@@ -225,20 +207,16 @@ def assign_movement_category(df: pl.DataFrame) -> pl.DataFrame:
         return df.with_columns(pl.lit("Unclassified").alias("primary_category"))
 
     davis_present = pl.col("total_charges_delta").is_not_null()
-    clocks_moved = pl.col("clocks_moved_ind") == 1 if "clocks_moved_ind" in df.columns else (
-        pl.col("book_2_pkup_delta").fill_null(0).abs().ge(CLOCK_DELTA_MIN)
-        | pl.col("avail_2_book_delta").fill_null(0).abs().ge(CLOCK_DELTA_MIN)
+    clocks_moved = (
+        pl.col("clocks_moved_ind") == 1
+        if "clocks_moved_ind" in df.columns
+        else (
+            pl.col("book_2_pkup_delta").fill_null(0).abs().ge(CLOCK_DELTA_MIN)
+            | pl.col("avail_2_book_delta").fill_null(0).abs().ge(CLOCK_DELTA_MIN)
+        )
     )
-    index_change = (
-        pl.col("index_change_ind") == 1
-        if "index_change_ind" in df.columns
-        else pl.lit(False)
-    )
-    path_taken_change = (
-        pl.col("path_taken_change_ind") == 1
-        if "path_taken_change_ind" in df.columns
-        else pl.lit(False)
-    )
+    index_change = pl.col("index_change_ind") == 1 if "index_change_ind" in df.columns else pl.lit(False)
+    path_taken_change = pl.col("path_taken_change_ind") == 1 if "path_taken_change_ind" in df.columns else pl.lit(False)
     shipment_change = pl.col("charge_inc_ind") == 1
     if "equip_change_ind" in df.columns:
         shipment_change = shipment_change | (pl.col("equip_change_ind") == 1)

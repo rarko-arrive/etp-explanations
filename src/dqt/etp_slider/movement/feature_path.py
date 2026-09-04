@@ -43,9 +43,7 @@ def _feat_at_mark(sub: pl.DataFrame, col: str, mark_hrs: int) -> Any:
     return row[col][0]
 
 
-def _checkpoint_numeric_values(
-    feat: pl.DataFrame, loadnumber: int, col: str
-) -> dict[int, float]:
+def _checkpoint_numeric_values(feat: pl.DataFrame, loadnumber: int, col: str) -> dict[int, float]:
     sub = feat.filter(pl.col("loadnumber") == loadnumber)
     if sub.is_empty() or col not in sub.columns:
         return {}
@@ -85,9 +83,7 @@ def _load_has_charge_path_increase(cps: dict[int, float], *, eps: float = CHARGE
     return False
 
 
-def _load_has_categorical_path_change(
-    feat: pl.DataFrame, loadnumber: int, col: str
-) -> bool:
+def _load_has_categorical_path_change(feat: pl.DataFrame, loadnumber: int, col: str) -> bool:
     sub = feat.filter(pl.col("loadnumber") == loadnumber)
     if sub.is_empty() or col not in sub.columns:
         return False
@@ -127,21 +123,11 @@ def detect_feature_path_flags(feat: pl.DataFrame) -> pl.DataFrame:
         rows.append(
             {
                 "loadnumber": ln_i,
-                "clhp_path_change_ind": int(
-                    _load_has_abs_path_change(clhp_cps, eps=CLHP_PATH_EPS)
-                ),
-                "charge_path_inc_ind": int(
-                    _load_has_charge_path_increase(charge_cps, eps=CHARGE_PATH_EPS)
-                ),
-                "hard_ft_path_change_ind": int(
-                    _load_has_abs_path_change(hard_ft_cps, eps=HARD_FT_PATH_EPS)
-                ),
-                "equip_path_change_ind": int(
-                    _load_has_categorical_path_change(feat, ln_i, "load_type")
-                ),
-                "path_taken_change_ind": int(
-                    _load_has_categorical_path_change(feat, ln_i, "path_taken")
-                ),
+                "clhp_path_change_ind": int(_load_has_abs_path_change(clhp_cps, eps=CLHP_PATH_EPS)),
+                "charge_path_inc_ind": int(_load_has_charge_path_increase(charge_cps, eps=CHARGE_PATH_EPS)),
+                "hard_ft_path_change_ind": int(_load_has_abs_path_change(hard_ft_cps, eps=HARD_FT_PATH_EPS)),
+                "equip_path_change_ind": int(_load_has_categorical_path_change(feat, ln_i, "load_type")),
+                "path_taken_change_ind": int(_load_has_categorical_path_change(feat, ln_i, "path_taken")),
             }
         )
     return pl.DataFrame(rows)
@@ -169,33 +155,25 @@ def apply_feature_path_upgrades(df: pl.DataFrame, feat: pl.DataFrame | None) -> 
     if "clhp_change_ind" not in out.columns:
         out = out.with_columns(pl.lit(0).cast(pl.Int8).alias("clhp_change_ind"))
     out = out.with_columns(
-        (pl.col("clhp_change_ind") | pl.col("clhp_path_change_ind"))
-        .cast(pl.Int8)
-        .alias("clhp_change_ind")
+        (pl.col("clhp_change_ind") | pl.col("clhp_path_change_ind")).cast(pl.Int8).alias("clhp_change_ind")
     )
 
     if "charge_inc_ind" not in out.columns:
         out = out.with_columns(pl.lit(0).cast(pl.Int8).alias("charge_inc_ind"))
     out = out.with_columns(
-        (pl.col("charge_inc_ind") | pl.col("charge_path_inc_ind"))
-        .cast(pl.Int8)
-        .alias("charge_inc_ind")
+        (pl.col("charge_inc_ind") | pl.col("charge_path_inc_ind")).cast(pl.Int8).alias("charge_inc_ind")
     )
 
     if "hard_ft_inc_ind" not in out.columns:
         out = out.with_columns(pl.lit(0).cast(pl.Int8).alias("hard_ft_inc_ind"))
     out = out.with_columns(
-        (pl.col("hard_ft_inc_ind") | pl.col("hard_ft_path_change_ind"))
-        .cast(pl.Int8)
-        .alias("hard_ft_inc_ind")
+        (pl.col("hard_ft_inc_ind") | pl.col("hard_ft_path_change_ind")).cast(pl.Int8).alias("hard_ft_inc_ind")
     )
 
     if "equip_change_ind" not in out.columns:
         out = out.with_columns(pl.lit(0).cast(pl.Int8).alias("equip_change_ind"))
     out = out.with_columns(
-        (pl.col("equip_change_ind") | pl.col("equip_path_change_ind"))
-        .cast(pl.Int8)
-        .alias("equip_change_ind")
+        (pl.col("equip_change_ind") | pl.col("equip_path_change_ind")).cast(pl.Int8).alias("equip_change_ind")
     )
 
     if "path_taken_change_ind" not in out.columns:

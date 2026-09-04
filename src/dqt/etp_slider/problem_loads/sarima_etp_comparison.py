@@ -129,9 +129,11 @@ def _join_sarima_dial(
         pl.col(pred_col).alias("sarima_dial_at_book"),
         pl.col("y").alias("actual_dial_at_book"),
     ).unique(subset=["_book_date"])
-    return frame.with_columns(pl.col(DATE_COL).cast(pl.Date).alias("_book_date")).join(
-        sched, on="_book_date", how="left"
-    ).drop("_book_date")
+    return (
+        frame.with_columns(pl.col(DATE_COL).cast(pl.Date).alias("_book_date"))
+        .join(sched, on="_book_date", how="left")
+        .drop("_book_date")
+    )
 
 
 def _per_row_pricing_scores(frame: pl.DataFrame) -> pl.DataFrame:
@@ -242,9 +244,7 @@ def build_sarima_etp_comparison_frame(
 
     if "path_archetype" in frame.columns:
         frame = frame.with_columns(
-            pl.col("path_archetype")
-            .replace(LEADTIME_ARCHETYPE_LABELS)
-            .alias("path_archetype_label")
+            pl.col("path_archetype").replace(LEADTIME_ARCHETYPE_LABELS).alias("path_archetype_label")
         )
 
     ordered = [
@@ -281,9 +281,7 @@ def _segment_summary(sub: pl.DataFrame) -> dict[str, Any]:
         s = sub[col].drop_nulls()
         return round(float(s.median()), 2) if s.len() else None
 
-    comparable = has_sarima.filter(
-        pl.col("mae_etp_book").is_not_null() & pl.col("mae_sarima_book").is_not_null()
-    )
+    comparable = has_sarima.filter(pl.col("mae_etp_book").is_not_null() & pl.col("mae_sarima_book").is_not_null())
     share_sarima_wins = None
     if comparable.height:
         share_sarima_wins = round(

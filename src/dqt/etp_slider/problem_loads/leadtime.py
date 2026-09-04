@@ -44,9 +44,7 @@ LEADTIME_ARCHETYPE_LABELS: dict[str, str] = {
     "unknown": "Unknown",
 }
 
-MDE_ENRICHMENT_SQL = (
-    Path(__file__).resolve().parents[2] / "SQL" / "etp-slider" / "lc-cohort-mde-enrichment.sql"
-)
+MDE_ENRICHMENT_SQL = Path(__file__).resolve().parents[2] / "SQL" / "etp-slider" / "lc-cohort-mde-enrichment.sql"
 
 
 def haul_band_expr(col: str = "loaded_miles") -> pl.Expr:
@@ -164,8 +162,14 @@ def classify_path_archetypes(lc: pl.DataFrame) -> pl.DataFrame:
         .otherwise(pl.lit("steady"))
     )
     return base.with_columns(archetype.alias("path_archetype")).drop(
-        "_i168", "_i96", "_i72", "_i48",
-        "_d_168_96", "_d_96_72", "_d_72_48", "_d_168_72",
+        "_i168",
+        "_i96",
+        "_i72",
+        "_i48",
+        "_d_168_96",
+        "_d_96_72",
+        "_d_72_48",
+        "_d_168_72",
     )
 
 
@@ -219,28 +223,14 @@ def _path_archetype_mae(
             cache_path=book_quotes_cache,
         )
 
-    valid_avail = (
-        pl.col(COST_COL).is_finite()
-        & pl.col("etp50_avail").is_finite()
-        & (pl.col("etp50_avail") > 0)
-    )
+    valid_avail = pl.col(COST_COL).is_finite() & pl.col("etp50_avail").is_finite() & (pl.col("etp50_avail") > 0)
     mae_exprs = [
-        pl.when(valid_avail)
-        .then((pl.col("etp50_avail") - pl.col(COST_COL)).abs())
-        .alias("_mae_avail"),
+        pl.when(valid_avail).then((pl.col("etp50_avail") - pl.col(COST_COL)).abs()).alias("_mae_avail"),
     ]
     agg_exprs = [pl.col("_mae_avail").mean().alias("mae_avail")]
     if "etp50_book" in frame.columns:
-        valid_book = (
-            pl.col(COST_COL).is_finite()
-            & pl.col("etp50_book").is_finite()
-            & (pl.col("etp50_book") > 0)
-        )
-        mae_exprs.append(
-            pl.when(valid_book)
-            .then((pl.col("etp50_book") - pl.col(COST_COL)).abs())
-            .alias("_mae_book")
-        )
+        valid_book = pl.col(COST_COL).is_finite() & pl.col("etp50_book").is_finite() & (pl.col("etp50_book") > 0)
+        mae_exprs.append(pl.when(valid_book).then((pl.col("etp50_book") - pl.col(COST_COL)).abs()).alias("_mae_book"))
         agg_exprs.append(pl.col("_mae_book").mean().alias("mae_book"))
     frame = frame.with_columns(*mae_exprs)
     stats = frame.group_by("path_archetype").agg(*agg_exprs)
@@ -262,9 +252,7 @@ def build_leadtime_archetype_breakdown(
 
     if tail.is_empty() or "primary_category" not in tail.columns:
         return []
-    lc = tail.filter(
-        pl.col("primary_category").replace(LEGACY_LEADTIME_CATEGORY, LC_CATEGORY) == LC_CATEGORY
-    )
+    lc = tail.filter(pl.col("primary_category").replace(LEGACY_LEADTIME_CATEGORY, LC_CATEGORY) == LC_CATEGORY)
     if lc.is_empty():
         return []
     lc = classify_path_archetypes(lc)
@@ -296,12 +284,8 @@ def build_leadtime_archetype_breakdown(
             "label": LEADTIME_ARCHETYPE_LABELS.get(arch, arch),
             "n_loads": k,
             "pct_of_lc": round(float(row["pct_of_lc"]), 4),
-            "avg_shift_amt": round(float(row["avg_shift_amt"]), 2)
-            if row["avg_shift_amt"] is not None
-            else None,
-            "avg_shift_pct": round(float(row["avg_shift_pct"]), 4)
-            if row["avg_shift_pct"] is not None
-            else None,
+            "avg_shift_amt": round(float(row["avg_shift_amt"]), 2) if row["avg_shift_amt"] is not None else None,
+            "avg_shift_pct": round(float(row["avg_shift_pct"]), 4) if row["avg_shift_pct"] is not None else None,
             "pct_shift_positive": direction.get("pct_shift_positive"),
             "pct_shift_negative": direction.get("pct_shift_negative"),
         }
@@ -324,12 +308,8 @@ def build_leadtime_archetype_breakdown(
             "label": LEADTIME_ARCHETYPE_LABELS.get(arch, arch),
             "n_loads": k,
             "pct_of_lc": round(float(row["pct_of_lc"]), 4),
-            "avg_shift_amt": round(float(row["avg_shift_amt"]), 2)
-            if row["avg_shift_amt"] is not None
-            else None,
-            "avg_shift_pct": round(float(row["avg_shift_pct"]), 4)
-            if row["avg_shift_pct"] is not None
-            else None,
+            "avg_shift_amt": round(float(row["avg_shift_amt"]), 2) if row["avg_shift_amt"] is not None else None,
+            "avg_shift_pct": round(float(row["avg_shift_pct"]), 4) if row["avg_shift_pct"] is not None else None,
             "pct_shift_positive": direction.get("pct_shift_positive"),
             "pct_shift_negative": direction.get("pct_shift_negative"),
         }
@@ -384,11 +364,13 @@ def detect_target_pullbacks(
         .len()
         .rename({"len": "n_target_pullbacks"})
     )
-    gaps = merged.with_columns(
-        (pl.col("model_etp50") - pl.col("audit_t3")).alias("gap")
-    ).group_by("loadnumber").agg(
-        pl.col("gap").max().alias("max_model_minus_t3"),
-        pl.col("gap").mean().alias("avg_model_minus_t3"),
+    gaps = (
+        merged.with_columns((pl.col("model_etp50") - pl.col("audit_t3")).alias("gap"))
+        .group_by("loadnumber")
+        .agg(
+            pl.col("gap").max().alias("max_model_minus_t3"),
+            pl.col("gap").mean().alias("avg_model_minus_t3"),
+        )
     )
     out = lc.join(pullbacks, on="loadnumber", how="left").join(gaps, on="loadnumber", how="left")
     return out.with_columns(
@@ -539,10 +521,7 @@ def index_secondary_impact(lc: pl.DataFrame) -> dict[str, pl.DataFrame]:
         }
         mix_label = (
             pl.concat_str(
-                [
-                    pl.when(pl.col(c)).then(pl.lit(short.get(c, c))).otherwise(pl.lit(None))
-                    for c in fired_cols
-                ],
+                [pl.when(pl.col(c)).then(pl.lit(short.get(c, c))).otherwise(pl.lit(None)) for c in fired_cols],
                 separator="+",
                 ignore_nulls=True,
             )
@@ -632,9 +611,7 @@ def profile_lc_cohort(lc: pl.DataFrame) -> dict[str, pl.DataFrame]:
         .sort("avail_month")
     )
     by_archetype = (
-        archetype_segment_summary(lc, pct_denominator=n)
-        if "path_archetype" in lc.columns
-        else pl.DataFrame()
+        archetype_segment_summary(lc, pct_denominator=n) if "path_archetype" in lc.columns else pl.DataFrame()
     )
     by_pullback = (
         lc.group_by("target_pullback_ind")
@@ -681,9 +658,7 @@ def build_lc_exemplars(lc: pl.DataFrame, *, n_each: int = 10) -> pl.DataFrame:
     if "clock_only_ind" in lc.columns:
         picks.append(
             _tag(
-                lc.filter(pl.col("clock_only_ind") == 1)
-                .sort("etp50_shift_pct", descending=True)
-                .head(n_each),
+                lc.filter(pl.col("clock_only_ind") == 1).sort("etp50_shift_pct", descending=True).head(n_each),
                 "clock_only",
             )
         )
@@ -697,17 +672,13 @@ def build_lc_exemplars(lc: pl.DataFrame, *, n_each: int = 10) -> pl.DataFrame:
     if "target_pullback_ind" in lc.columns:
         picks.append(
             _tag(
-                lc.filter(pl.col("target_pullback_ind") == 1)
-                .sort("etp50_shift_pct", descending=True)
-                .head(n_each),
+                lc.filter(pl.col("target_pullback_ind") == 1).sort("etp50_shift_pct", descending=True).head(n_each),
                 "target_pullback",
             )
         )
     if "path_archetype" in lc.columns:
         for arch in ("late_cliff", "early_burst"):
-            sub = lc.filter(pl.col("path_archetype") == arch).sort(
-                "etp50_shift_pct", descending=True
-            ).head(n_each)
+            sub = lc.filter(pl.col("path_archetype") == arch).sort("etp50_shift_pct", descending=True).head(n_each)
             if sub.height:
                 picks.append(_tag(sub, arch))
 
@@ -746,9 +717,7 @@ def enrich_lc_davis_quotes(
     if not davis_cache.exists():
         return lc
     davis = pl.read_parquet(davis_cache, columns=["loadnumber", *missing])
-    return lc.drop([c for c in missing if c in lc.columns], strict=False).join(
-        davis, on="loadnumber", how="left"
-    )
+    return lc.drop([c for c in missing if c in lc.columns], strict=False).join(davis, on="loadnumber", how="left")
 
 
 def join_lc_carrier_cost(
@@ -767,11 +736,7 @@ def join_lc_carrier_cost(
     features_path = Path(features_path)
     if not features_path.exists():
         return lc
-    costs = (
-        pl.scan_parquet(features_path)
-        .select(pl.col(ID_COL).alias("loadnumber"), pl.col(COST_COL))
-        .collect()
-    )
+    costs = pl.scan_parquet(features_path).select(pl.col(ID_COL).alias("loadnumber"), pl.col(COST_COL)).collect()
     return lc.join(costs, on="loadnumber", how="left")
 
 
@@ -799,9 +764,7 @@ def lc_pricing_accuracy_comparison(
             col = f"{quote_prefix}{suffix}"
             if col not in frame.columns:
                 continue
-            sub = frame.filter(
-                pl.col(COST_COL).is_finite() & pl.col(col).is_finite() & (pl.col(col) > 0)
-            )
+            sub = frame.filter(pl.col(COST_COL).is_finite() & pl.col(col).is_finite() & (pl.col(col) > 0))
             n = sub.height
             if n == 0:
                 continue
@@ -916,9 +879,7 @@ def _score_pricing_slice(
 ) -> dict[str, Any] | None:
     if quote_col not in sub.columns or COST_COL not in sub.columns:
         return None
-    scored = sub.filter(
-        pl.col(COST_COL).is_finite() & pl.col(quote_col).is_finite() & (pl.col(quote_col) > 0)
-    )
+    scored = sub.filter(pl.col(COST_COL).is_finite() & pl.col(quote_col).is_finite() & (pl.col(quote_col) > 0))
     n = scored.height
     if n == 0:
         return None
@@ -1116,16 +1077,10 @@ def enrich_book_time_quotes(
 
     if cached is not None and not force:
         out = _join_book_time_quotes(df, cached)
-        missing = (
-            out.filter(pl.col("etp50_book").is_null())
-            .select("loadnumber")
-            .unique()
-        )
+        missing = out.filter(pl.col("etp50_book").is_null()).select("loadnumber").unique()
         if missing.is_empty():
             return out
-        supplement = _book_quotes_for_loads(
-            missing, hist_path=hist_path, survival_path=survival_path
-        )
+        supplement = _book_quotes_for_loads(missing, hist_path=hist_path, survival_path=survival_path)
         if supplement.is_empty():
             return out
         book = pl.concat([cached, supplement]).unique(subset=["loadnumber"], keep="last")
@@ -1184,9 +1139,7 @@ def _lc_problem_loads(labeled: pl.DataFrame) -> pl.DataFrame:
     frame = labeled
     if "is_tail" in frame.columns:
         frame = frame.filter(pl.col("is_tail"))
-    return frame.filter(
-        pl.col("primary_category").replace(LEGACY_LEADTIME_CATEGORY, LC_CATEGORY) == LC_CATEGORY
-    )
+    return frame.filter(pl.col("primary_category").replace(LEGACY_LEADTIME_CATEGORY, LC_CATEGORY) == LC_CATEGORY)
 
 
 def _confidence_shift_row(
@@ -1360,20 +1313,11 @@ def build_leadtime_confidence_breakdown(
             "is_estimate": True,
         }
         if hc_row.get("avg_shift_amt") is not None and idx_row.get("avg_shift_amt") is not None:
-            est["lift_amt_vs_high_conf"] = round(
-                float(idx_row["avg_shift_amt"]) - float(hc_row["avg_shift_amt"]), 2
-            )
+            est["lift_amt_vs_high_conf"] = round(float(idx_row["avg_shift_amt"]) - float(hc_row["avg_shift_amt"]), 2)
         if hc_row.get("avg_shift_pct") is not None and idx_row.get("avg_shift_pct") is not None:
-            est["lift_pct_vs_high_conf"] = round(
-                float(idx_row["avg_shift_pct"]) - float(hc_row["avg_shift_pct"]), 4
-            )
-        if (
-            hc_row.get("att_create") is not None
-            and idx_row.get("att_create") is not None
-        ):
-            est["lift_att_create_vs_high_conf"] = round(
-                float(idx_row["att_create"]) - float(hc_row["att_create"]), 4
-            )
+            est["lift_pct_vs_high_conf"] = round(float(idx_row["avg_shift_pct"]) - float(hc_row["avg_shift_pct"]), 4)
+        if hc_row.get("att_create") is not None and idx_row.get("att_create") is not None:
+            est["lift_att_create_vs_high_conf"] = round(float(idx_row["att_create"]) - float(hc_row["att_create"]), 4)
         rows.append(est)
 
     return rows
@@ -1738,11 +1682,7 @@ def build_leadtime_attribution_flags(lc: pl.DataFrame) -> pl.DataFrame:
         if "target_pullback_ind" in lc.columns
         else pl.lit(False)
     )
-    late_cliff = (
-        pl.col("path_archetype") == "late_cliff"
-        if "path_archetype" in lc.columns
-        else pl.lit(False)
-    )
+    late_cliff = pl.col("path_archetype") == "late_cliff" if "path_archetype" in lc.columns else pl.lit(False)
     cliff_suspect = late_cliff & (mde_excluded | override_excluded | pullback)
 
     is_lc = pl.col("primary_category") == LC_CATEGORY if "primary_category" in lc.columns else pl.lit(True)
@@ -1796,13 +1736,9 @@ def build_leadtime_attribution_summary(lc: pl.DataFrame) -> dict[str, Any]:
     attr = lc.filter(pl.col("leadtime_attribution_ind") == 1)
     excluded_mde = int(lc.filter(pl.col("mde_excluded_ind") == 1).height) if "mde_excluded_ind" in lc.columns else 0
     excluded_override = (
-        int(lc.filter(pl.col("override_excluded_ind") == 1).height)
-        if "override_excluded_ind" in lc.columns
-        else 0
+        int(lc.filter(pl.col("override_excluded_ind") == 1).height) if "override_excluded_ind" in lc.columns else 0
     )
-    cliff_suspect = (
-        int(lc.filter(pl.col("cliff_suspect_ind") == 1).height) if "cliff_suspect_ind" in lc.columns else 0
-    )
+    cliff_suspect = int(lc.filter(pl.col("cliff_suspect_ind") == 1).height) if "cliff_suspect_ind" in lc.columns else 0
     letp_only = (
         int(lc.filter((pl.col("mde_letp_ind") == 1) & (pl.col("mde_timeline_ind") == 0)).height)
         if {"mde_letp_ind", "mde_timeline_ind"}.issubset(lc.columns)
@@ -1906,14 +1842,46 @@ def endpoint_category_shares(lc: pl.DataFrame) -> pl.DataFrame:
     cat2_cols = [c for c in ("total_charges_delta", "hard_ft_delta") if c in lc.columns]
 
     rows: list[dict[str, Any]] = []
-    rows.append({"category": "LeadtimeChange (clocks)", "metric": "clocks_moved_rate", "value": float(lc["clocks_moved_ind"].mean()) if "clocks_moved_ind" in lc.columns else None})
-    rows.append({"category": "LeadtimeChange (clocks)", "metric": "clock_only_rate", "value": float(lc["clock_only_ind"].mean()) if "clock_only_ind" in lc.columns else None})
+    rows.append(
+        {
+            "category": "LeadtimeChange (clocks)",
+            "metric": "clocks_moved_rate",
+            "value": float(lc["clocks_moved_ind"].mean()) if "clocks_moved_ind" in lc.columns else None,
+        }
+    )
+    rows.append(
+        {
+            "category": "LeadtimeChange (clocks)",
+            "metric": "clock_only_rate",
+            "value": float(lc["clock_only_ind"].mean()) if "clock_only_ind" in lc.columns else None,
+        }
+    )
     for c in cat1_cols:
-        rows.append({"category": "RandomChange (market)", "metric": f"avg_abs_{c}", "value": float(lc[c].fill_null(0).abs().mean())})
+        rows.append(
+            {
+                "category": "RandomChange (market)",
+                "metric": f"avg_abs_{c}",
+                "value": float(lc[c].fill_null(0).abs().mean()),
+            }
+        )
     for c in cat2_cols:
-        rows.append({"category": "Shipment/Difficulty", "metric": f"avg_abs_{c}", "value": float(lc[c].fill_null(0).abs().mean())})
-    rows.append({"category": "Endpoint shift", "metric": "avg_etp50_shift_amt", "value": float(lc["etp50_shift_amt"].mean())})
-    rows.append({"category": "Endpoint shift", "metric": "avg_target3_shift_amt", "value": float(lc["target3_shift_amt"].mean()) if "target3_shift_amt" in lc.columns else None})
+        rows.append(
+            {
+                "category": "Shipment/Difficulty",
+                "metric": f"avg_abs_{c}",
+                "value": float(lc[c].fill_null(0).abs().mean()),
+            }
+        )
+    rows.append(
+        {"category": "Endpoint shift", "metric": "avg_etp50_shift_amt", "value": float(lc["etp50_shift_amt"].mean())}
+    )
+    rows.append(
+        {
+            "category": "Endpoint shift",
+            "metric": "avg_target3_shift_amt",
+            "value": float(lc["target3_shift_amt"].mean()) if "target3_shift_amt" in lc.columns else None,
+        }
+    )
     return pl.DataFrame(rows)
 
 
@@ -2048,7 +2016,9 @@ def export_lc_analysis(
     endpoint_shares = endpoint_category_shares(lc)
     sarima_ctx = sarima_dial_context(lc, dial_path=data_dir / "sarima_dial_walkforward.parquet")
     index_impact = index_secondary_impact(lc)
-    davis_for_quotes = Path(davis_cache) if davis_cache else cache / f"analysis-davis-raw-{avail_start}_{avail_end}.parquet"
+    davis_for_quotes = (
+        Path(davis_cache) if davis_cache else cache / f"analysis-davis-raw-{avail_start}_{avail_end}.parquet"
+    )
     pricing_acc = lc_pricing_accuracy_comparison(
         lc,
         davis_cache=davis_for_quotes if davis_for_quotes.exists() else None,
@@ -2112,9 +2082,7 @@ def export_lc_analysis(
         lc_path=lc_path,
     )
 
-    (out_dir / "lc-tail-loadnumbers.txt").write_text(
-        "\n".join(str(x) for x in lc["loadnumber"].to_list()) + "\n"
-    )
+    (out_dir / "lc-tail-loadnumbers.txt").write_text("\n".join(str(x) for x in lc["loadnumber"].to_list()) + "\n")
     if not exemplars.is_empty():
         exemplars.write_csv(out_dir / "lc-tail-exemplars.csv")
 
@@ -2124,12 +2092,11 @@ def export_lc_analysis(
         "avail_start": avail_start,
         "avail_end": avail_end,
         "overview": profiles["overview"].to_dicts(),
-        "by_path_archetype": profiles["by_path_archetype"].to_dicts() if not profiles["by_path_archetype"].is_empty() else [],
+        "by_path_archetype": profiles["by_path_archetype"].to_dicts()
+        if not profiles["by_path_archetype"].is_empty()
+        else [],
         "secondary_flags": profiles["secondary_flags"].to_dicts(),
-        "index_impact": {
-            k: v.to_dicts() if not v.is_empty() else []
-            for k, v in index_impact.items()
-        },
+        "index_impact": {k: v.to_dicts() if not v.is_empty() else [] for k, v in index_impact.items()},
         "mde_cross_tab": mde_tab.to_dicts() if not mde_tab.is_empty() else [],
         "mde_archetype_cross_tab": mde_arch_tab.to_dicts() if not mde_arch_tab.is_empty() else [],
         "attribution_summary": attribution_summary,
@@ -2286,8 +2253,8 @@ def render_lc_readout(summary: dict[str, Any], *, parent_n: int = 278_458) -> st
 
     return f"""# Lead Time Change Problem Loads — Operations Readout
 
-**Cohort:** 7–14 day lead, available {summary.get('avail_start')} → {summary.get('avail_end')}  
-**Problem-load rule:** shift ≥ 10% × ETP50 at available (scaled)  
+**Cohort:** 7–14 day lead, available {summary.get("avail_start")} → {summary.get("avail_end")}
+**Problem-load rule:** shift ≥ 10% × ETP50 at available (scaled)
 **Generated from:** `lc-analysis-summary.json`
 
 ---
@@ -2298,10 +2265,10 @@ def render_lc_readout(summary: dict[str, Any], *, parent_n: int = 278_458) -> st
 
 | Metric | Value |
 |--------|------:|
-| Avg ETP50 shift | {_pct(overview.get('avg_shift_pct'))} / {_amt(overview.get('avg_shift_amt'))} |
-| Median ETP50 shift | {_pct(overview.get('med_shift_pct'))} / {_amt(overview.get('med_shift_amt'))} |
-| Clock-only (pure lead-time tick) | {_pct(clock_only.get('pct_of_lc'))} of LC cohort |
-| Target pullback after model spike | {_pct(pullback.get('pct_of_lc'))} of LC cohort |
+| Avg ETP50 shift | {_pct(overview.get("avg_shift_pct"))} / {_amt(overview.get("avg_shift_amt"))} |
+| Median ETP50 shift | {_pct(overview.get("med_shift_pct"))} / {_amt(overview.get("med_shift_amt"))} |
+| Clock-only (pure lead-time tick) | {_pct(clock_only.get("pct_of_lc"))} of LC cohort |
+| Target pullback after model spike | {_pct(pullback.get("pct_of_lc"))} of LC cohort |
 
 ---
 
@@ -2312,7 +2279,7 @@ Most of these loads are **stable shipments** (charges and difficulty flags did n
 The pain points cluster in two areas:
 
 1. **Late-board cliffs** — indexed ETP50 jumps in the last 3–4 days before pickup (see path archetypes below).
-2. **Target vs model gaps** — audit targets sometimes spike then get **manually pulled back** while model ETP50 stays elevated (~{pullback.get('pct_of_lc', 0) * 100:.0f}% of LC loads show at least one pullback hour).
+2. **Target vs model gaps** — audit targets sometimes spike then get **manually pulled back** while model ETP50 stays elevated (~{pullback.get("pct_of_lc", 0) * 100:.0f}% of LC loads show at least one pullback hour).
 
 ---
 
@@ -2320,7 +2287,7 @@ The pain points cluster in two areas:
 
 | Archetype | Loads | Share of LC | Avg % shift | Avg $ shift | % ↑ | % ↓ |
 |-----------|------:|------------:|------------:|------------:|----:|----:|
-{arch_lines or '| — | — | — | — |'}
+{arch_lines or "| — | — | — | — |"}
 
 - **early_burst** — large move in first days after posting (initial calibration).
 - **mid_plateau** — flat mid-board then late move.
@@ -2333,7 +2300,7 @@ Problem **LeadtimeChange** loads only (same 35k cohort as above). **Create** = q
 
 | Path shape | n @ create | Att p50 | Gap pp | MAE p50 | n @ book | Att p50 | Gap pp | MAE p50 | Δ Att |
 |------------|----------:|--------:|-------:|--------:|---------:|--------:|-------:|--------:|------:|
-{lt_arch_p50_lines or '| — | — | — | — | — | — | — | — | — | — |'}
+{lt_arch_p50_lines or "| — | — | — | — | — | — | — | — | — | — |"}
 
 **Read:** Every archetype shows the same pattern as the headline — **under-quoted at create**, **materially better by book** as clocks advance. `early_burst` loads tend to start with the largest gap (big early ETP move not yet aligned to realized cost); `late_cliff` loads often show the largest book-time MAE residual (sudden final-board step may overshoot or undershoot carrier outcome).
 
@@ -2341,20 +2308,20 @@ Problem **LeadtimeChange** loads only (same 35k cohort as above). **Create** = q
 
 ## Secondary index drift (RandomChange co-flag)
 
-**{_pct(index_flag.get('pct_of_lc'))}** of LC loads also trigger ``index_change_ind`` (lag7 CPM / fuel / DAT endpoint delta ≥ threshold). Clocks still win the primary label because of waterfall priority — this is **co-occurring market drift**, not a reclassification to RandomChange.
+**{_pct(index_flag.get("pct_of_lc"))}** of LC loads also trigger ``index_change_ind`` (lag7 CPM / fuel / DAT endpoint delta ≥ threshold). Clocks still win the primary label because of waterfall priority — this is **co-occurring market drift**, not a reclassification to RandomChange.
 
 | Segment | Loads | Share | Avg $ shift |
 |---------|------:|------:|------------:|
-| Index co-occur | {idx_lift.get('n_with_index', 0):,} | {_pct(idx_lift.get('index_event_rate'))} | {_amt(idx_lift.get('avg_shift_with_index'))} |
-| No index drift | {idx_lift.get('n_no_index', 0):,} | {_pct(1 - (idx_lift.get('index_event_rate') or 0))} | {_amt(idx_lift.get('avg_shift_no_index'))} |
+| Index co-occur | {idx_lift.get("n_with_index", 0):,} | {_pct(idx_lift.get("index_event_rate"))} | {_amt(idx_lift.get("avg_shift_with_index"))} |
+| No index drift | {idx_lift.get("n_no_index", 0):,} | {_pct(1 - (idx_lift.get("index_event_rate") or 0))} | {_amt(idx_lift.get("avg_shift_no_index"))} |
 
-**Lift with index vs without:** {_amt_signed(idx_lift.get('lift_amt_index_vs_no'))}/load (descriptive; weak correlation below → not a separate causal bucket).
+**Lift with index vs without:** {_amt_signed(idx_lift.get("lift_amt_index_vs_no"))}/load (descriptive; weak correlation below → not a separate causal bucket).
 
 ### Which index moved?
 
 | Component | Loads flagged | % of LC | Avg $ (flagged) | Avg $ (not flagged) | Lift |
 |-----------|-------------:|--------:|----------------:|--------------------:|-----:|
-{comp_lines or '| — | — | — | — | — | — |'}
+{comp_lines or "| — | — | — | — | — | — |"}
 
 **lag7 CPM** drives almost all flags on 7–14 day boards — expected slow market drift during long lead time.
 
@@ -2362,7 +2329,7 @@ Problem **LeadtimeChange** loads only (same 35k cohort as above). **Create** = q
 
 | Feature | r vs $ shift | r vs % shift |
 |---------|-------------:|-------------:|
-{corr_lines or '| — | — | — |'}
+{corr_lines or "| — | — | — |"}
 
 **Read:** correlations near zero → index drift **does not explain** the LC problem-load move load-by-load; clocks remain the dominant story. SARIMA dial smoothing targets this index layer globally, not per-load lead-time cliffs.
 
@@ -2378,7 +2345,7 @@ Scope: all **Lead Time Change**–labeled shipments in the 7–14 day window (no
 
 | ETP segment | n @ create | Att p50 | Gap pp | MAE p50 | n @ book | Att p50 | Gap pp | MAE p50 |
 |-------------|----------:|--------:|-------:|--------:|---------:|--------:|-------:|--------:|
-{lt_p50_lines or '| — | — | — | — | — | — | — | — | — |'}
+{lt_p50_lines or "| — | — | — | — | — | — | — | — | — |"}
 
 **Read:** Volatile lead-time loads are **severely under-quoted at create** (p50 att 7% vs 50% target) and **recover to ~44% by book** as clocks advance — MAE falls from $284 → $155. Stable lead-time loads follow the same pattern at lower magnitude (27% → 41%; MAE $168 → $133). The ETP repricing path tracks realized carrier cost; volatile loads are the calibration gap ops feels on the board.
 
@@ -2386,7 +2353,7 @@ Scope: all **Lead Time Change**–labeled shipments in the 7–14 day window (no
 
 | ETP segment | Quote | n @ create | Att @ create | MAE @ create | n @ book | Att @ book | MAE @ book |
 |-------------|-------|----------:|-------------:|-------------:|---------:|-----------:|-----------:|
-{lt_full_lines or '| — | — | — | — | — | — | — | — |'}
+{lt_full_lines or "| — | — | — | — | — | — | — | — |"}
 
 - **Create** = first available snapshot; **Book** = last model/audit snapshot ≤ `booked_on_utc`.
 - **t25 / t75 @ create** = Target 2 / Target 4 from Davis audit endpoints.
@@ -2398,7 +2365,7 @@ Problem-only slice (35k volatile LC loads) at the drift-report endpoint (48h bef
 
 | Quote | n @ avail | Att @ avail | Gap pp | MAE @ avail | n @ 48h | Att @ 48h | Gap pp | MAE @ 48h |
 |-------|----------:|------------:|-------:|------------:|--------:|----------:|-------:|----------:|
-{pricing_lines or '| — | — | — | — | — | — | — | — | — |'}
+{pricing_lines or "| — | — | — | — | — | — | — | — | — |"}
 
 ---
 
@@ -2406,7 +2373,7 @@ Problem-only slice (35k volatile LC loads) at the drift-report endpoint (48h bef
 
 | Signal | Loads | % of LC |
 |--------|------:|--------:|
-{chr(10).join(f"| {r.get('signal', '?')} | {r.get('n_loads', 0):,} | {_pct(r.get('pct_of_lc'))} |" for r in mde) or '| — | — | — |'}
+{chr(10).join(f"| {r.get('signal', '?')} | {r.get('n_loads', 0):,} | {_pct(r.get('pct_of_lc'))} |" for r in mde) or "| — | — | — |"}
 
 **DifficultyOverride as primary label** is rare in the full problem-load tail (~350 loads). MDE and charge overrides should be read as **co-occurring signals**, not the main driver of the 35k LC cohort.
 
@@ -2418,18 +2385,18 @@ Problem-only slice (35k volatile LC loads) at the drift-report endpoint (48h bef
 
 SARIMA in this repo smooths the **global market dial** on booked loads. It does not observe per-load lead-time clocks (`book_2_pkup`, `avail_2_book`). For loads labeled LeadtimeChange:
 
-- **Clock-only rate:** {_pct(clock_only.get('pct_of_lc'))} — expected model-by-design repricing.
+- **Clock-only rate:** {_pct(clock_only.get("pct_of_lc"))} — expected model-by-design repricing.
 - **Secondary index/charge flags** did not win priority but may co-occur on a subset.
 
 ### SARIMA pp50 vs ETP p50 @ book (volatile cohort)
 
 Book-time counterfactual: `sarima_pp_50` from the global dial vs realized carrier cost, compared to ETP p50 at book on the same loads. **ETP shift columns elsewhere in this memo remain avail→48hr.**
 
-Coverage: {int(sarima_cov.get('n_with_sarima', 0)):,} / {int(sarima_cov.get('n_loads', 0)):,} volatile loads with SARIMA pp50 ({_pct(sarima_cov.get('pct_with_sarima'))}).
+Coverage: {int(sarima_cov.get("n_with_sarima", 0)):,} / {int(sarima_cov.get("n_loads", 0)):,} volatile loads with SARIMA pp50 ({_pct(sarima_cov.get("pct_with_sarima"))}).
 
 | Segment | Loads | MAE ETP @ book | MAE SARIMA @ book | Share SARIMA closer |
 |---------|------:|---------------:|------------------:|--------------------:|
-{sarima_seg_lines or '| — | — | — | — | — |'}
+{sarima_seg_lines or "| — | — | — | — | — |"}
 
 **Read:** Negative delta (SARIMA closer) is rare on clock-driven path shapes if ETP @ book already tracks realized cost. SARIMA only plausibly helps where index co-occur fired — see full export `data/etp/sarima-vs-etp-volatile-summary.json`.
 
@@ -2439,13 +2406,13 @@ Coverage: {int(sarima_cov.get('n_with_sarima', 0)):,} / {int(sarima_cov.get('n_l
 
 ## FAQ
 
-**Is +10% a lot?**  
-Scaled gate = 10% of ETP50 at available (e.g. $50 on a $500 load). LC avg {_pct(overview.get('avg_shift_pct'))} vs ~5% endpoint drift on the full parent cohort.
+**Is +10% a lot?**
+Scaled gate = 10% of ETP50 at available (e.g. $50 on a $500 load). LC avg {_pct(overview.get("avg_shift_pct"))} vs ~5% endpoint drift on the full parent cohort.
 
-**Should we smooth cadence?**  
+**Should we smooth cadence?**
 Smoothing the global dial (SARIMA) will not remove clock repricing. Consider target cadence and when manual overrides fire.
 
-**Are these bad loads?**  
+**Are these bad loads?**
 Problem load = large observed shift, not proof the shift was inappropriate.
 
 ---

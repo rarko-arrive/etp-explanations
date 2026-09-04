@@ -55,9 +55,7 @@ def filter_lead_window(
     if "booking_window_hrs" not in per_load.columns:
         raise ValueError("per_load missing booking_window_hrs")
     lo_h, hi_h = min_d * 24, max_d * 24
-    out = per_load.filter(
-        pl.col("booking_window_hrs").is_between(lo_h, hi_h, closed="both")
-    )
+    out = per_load.filter(pl.col("booking_window_hrs").is_between(lo_h, hi_h, closed="both"))
     if avail_start is not None:
         start = date.fromisoformat(avail_start) if isinstance(avail_start, str) else avail_start
         out = out.filter(pl.col("made_available_utc").dt.date() >= pl.lit(start))
@@ -92,9 +90,7 @@ class TailThresholdConfig:
         return cls()
 
     def active(self) -> bool:
-        return (self.pct is not None and self.pct > 0) or (
-            self.amt is not None and self.amt > 0
-        )
+        return (self.pct is not None and self.pct > 0) or (self.amt is not None and self.amt > 0)
 
 
 def tail_threshold_expr(
@@ -357,13 +353,10 @@ def build_movement_qa(tail: pl.DataFrame) -> dict[str, Any]:
     if "clocks_moved_ind" not in tail.columns:
         return out
 
-    det = tail.filter(
-        pl.col("primary_category").is_in(["LeadtimeChange", LEGACY_LEADTIME_CATEGORY])
-    )
+    det = tail.filter(pl.col("primary_category").is_in(["LeadtimeChange", LEGACY_LEADTIME_CATEGORY]))
     rand = tail.filter(pl.col("primary_category") == "RandomChange")
     blocked = tail.filter(
-        (pl.col("clocks_moved_ind") == 1)
-        & pl.col("primary_category").is_in(["ShipmentChange", "DifficultyOverride"])
+        (pl.col("clocks_moved_ind") == 1) & pl.col("primary_category").is_in(["ShipmentChange", "DifficultyOverride"])
     )
 
     out["leadtime"] = {

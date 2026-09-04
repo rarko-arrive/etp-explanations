@@ -98,3 +98,6 @@ echo "Interpreter (Cursor / VS Code):"
 echo "  $(pwd)/.venv/bin/python"
 echo "Jupyter kernel:"
 echo "  Python ($PROJECT_NAME)"
+echo "Pre-commit:"
+uv run pre-commit install
+echo "  git hook installed (make pre-commit to run on all files)"

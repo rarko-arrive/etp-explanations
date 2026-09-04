@@ -81,11 +81,7 @@ def load_mde_timeline_events(
         return raw
 
     if "mde_description" in raw.columns:
-        raw = raw.filter(
-            pl.col("mde_description").map_elements(
-                is_market_movement_mde, return_dtype=pl.Boolean
-            )
-        )
+        raw = raw.filter(pl.col("mde_description").map_elements(is_market_movement_mde, return_dtype=pl.Boolean))
 
     if cache_path is not None:
         cache_path = Path(cache_path)
@@ -135,8 +131,7 @@ def build_mde_explorer_overlay(
         return annotations, meta
 
     timing_map = {
-        int(r["loadnumber"]): r["pickup_appt_latest_utc"]
-        for r in timing.select(timing_cols).iter_rows(named=True)
+        int(r["loadnumber"]): r["pickup_appt_latest_utc"] for r in timing.select(timing_cols).iter_rows(named=True)
     }
 
     for ln in loadnumbers:

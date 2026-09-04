@@ -94,8 +94,8 @@ def main(argv: list[str] | None = None) -> int:
     if ledger.is_empty():
         pricing_n = display_n = 0
     else:
-        pricing_n = ledger.filter(pl.col("is_pricing_driver") == True).height
-        display_n = ledger.filter(pl.col("is_pricing_driver") == False).height
+        pricing_n = ledger.filter(pl.col("is_pricing_driver")).height
+        display_n = ledger.filter(~pl.col("is_pricing_driver")).height
     print()
     print(f"Ledger: {ledger.height} rows ({pricing_n} pricing, {display_n} display)")
 
@@ -107,11 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         for k in ("clhp_pred_tot_cost_delta", "clhp_pred_tot_cost_rel_pct", "clhp_change_ind"):
             if k in endpoint and endpoint[k] is not None:
                 print(f"  {k}: {endpoint[k]}")
-    lt_n = (
-        ledger.filter(pl.col("driver_text").str.contains("Lightning")).height
-        if not ledger.is_empty()
-        else 0
-    )
+    lt_n = ledger.filter(pl.col("driver_text").str.contains("Lightning")).height if not ledger.is_empty() else 0
     if lt_n:
         print(f"  ledger Lightning rows: {lt_n}")
 

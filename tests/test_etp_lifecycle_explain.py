@@ -126,7 +126,7 @@ def test_explain_load_9199475() -> None:
     ledger = result["ledger"]
     assert ledger.height >= 2
 
-    pricing = ledger.filter(pl.col("is_pricing_driver") == True)
+    pricing = ledger.filter(pl.col("is_pricing_driver"))
     lc_rows = pricing.filter(pl.col("category") == "LeadtimeChange")
     assert lc_rows.height >= 2, "expected ≥2 material LeadtimeChange checkpoint rows"
 

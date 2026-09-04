@@ -17,5 +17,6 @@ SELECT
 FROM core_data.components.lod__market_disruption_event_loads mdl
 INNER JOIN core_data.components.lod__market_disruption_event_list mdlist
     ON mdlist.market_disruption_event_list_id = mdl.market_disruption_event_list_id
-WHERE mdl.loadnumber IN ({loadnumber_in_list})
-  AND mdlist.description = 'Market Movement'
+WHERE
+    mdl.loadnumber IN ({loadnumber_in_list})
+    AND mdlist.description = 'Market Movement'

@@ -74,21 +74,12 @@ def months_for_survival_read(
         start = date(avail_start.year, avail_start.month - 1, 1)
     end_ext = avail_end + timedelta(days=int(lead_max_days))
     _, _, _month_windows, _ = _lake_utils()
-    return [
-        ship_month
-        for _ws, _we, ship_month in _month_windows(
-            start.isoformat(), end_ext.isoformat()
-        )
-    ]
+    return [ship_month for _ws, _we, ship_month in _month_windows(start.isoformat(), end_ext.isoformat())]
 
 
 def infer_ship_window_from_lake(lake: LakePaths) -> tuple[str | None, str | None]:
     """Derive ship-date span from survival hive partitions on disk."""
-    months = sorted(
-        p.name.split("=", 1)[-1]
-        for p in lake.read_survival_endpoints.glob("ship_month=*")
-        if p.is_dir()
-    )
+    months = sorted(p.name.split("=", 1)[-1] for p in lake.read_survival_endpoints.glob("ship_month=*") if p.is_dir())
     if not months:
         return None, None
     _, _ = (int(x) for x in months[0].split("-"))
@@ -118,17 +109,10 @@ def load_survival_per_load(
     if lake is not None and survival_partitions_exist(lake):
         paths = _partition_paths(lake.read_survival_endpoints, ship_months)
         if not paths:
-            raise FileNotFoundError(
-                f"no survival endpoint partitions under {lake.read_survival_endpoints}"
-            )
-        return (
-            pl.concat([pl.read_parquet(p) for p in paths], how="vertical_relaxed")
-            .unique("loadnumber", keep="first")
-        )
+            raise FileNotFoundError(f"no survival endpoint partitions under {lake.read_survival_endpoints}")
+        return pl.concat([pl.read_parquet(p) for p in paths], how="vertical_relaxed").unique("loadnumber", keep="first")
     if per_load_path is None or not per_load_path.exists():
-        raise FileNotFoundError(
-            "survival per_load missing — run pull_survival_caches or pass per_load_path"
-        )
+        raise FileNotFoundError("survival per_load missing — run pull_survival_caches or pass per_load_path")
     return pl.read_parquet(per_load_path)
 
 
@@ -144,20 +128,12 @@ def load_survival_history(
     if lake is not None and _partition_paths(lake.read_survival_history, None):
         paths = _partition_paths(lake.read_survival_history, ship_months)
         if not paths:
-            raise FileNotFoundError(
-                f"no survival history partitions under {lake.read_survival_history}"
-            )
+            raise FileNotFoundError(f"no survival history partitions under {lake.read_survival_history}")
         lf = pl.concat([pl.scan_parquet(p) for p in paths], how="vertical_relaxed")
         return lf.join(ids, on="loadnumber", how="inner").collect()
     if hist_path is None or not hist_path.exists():
-        raise FileNotFoundError(
-            "survival history missing — run pull_survival_caches or pass hist_path"
-        )
-    return (
-        pl.scan_parquet(hist_path)
-        .join(ids, on="loadnumber", how="inner")
-        .collect()
-    )
+        raise FileNotFoundError("survival history missing — run pull_survival_caches or pass hist_path")
+    return pl.scan_parquet(hist_path).join(ids, on="loadnumber", how="inner").collect()
 
 
 def pull_survival_caches(
@@ -323,14 +299,10 @@ def survival_cohort_ids(
     hi_h = max_days * 24
     filt = per_load.filter(
         pl.col("booking_window_hrs").is_between(lo_h, hi_h, closed="both"),
-        (pl.col("booked_on_utc") - pl.col("made_available_utc")).dt.total_hours()
-        >= min_unbooked_hrs,
+        (pl.col("booked_on_utc") - pl.col("made_available_utc")).dt.total_hours() >= min_unbooked_hrs,
     )
     if avail_start is not None:
-        filt = filt.filter(
-            pl.col("made_available_utc")
-            >= pl.lit(datetime.combine(avail_start, datetime.min.time()))
-        )
+        filt = filt.filter(pl.col("made_available_utc") >= pl.lit(datetime.combine(avail_start, datetime.min.time())))
     if avail_end is not None:
         end_dt = datetime.combine(avail_end, datetime.max.time())
         filt = filt.filter(pl.col("made_available_utc") <= pl.lit(end_dt))
@@ -366,17 +338,11 @@ def _at_mark_survival(
         how="inner",
     )
     if mark_hrs == 999:
-        sub = sub.with_columns(
-            _mark_ts_expr(FIRST_CHECKPOINT_HRS).alias("_cutoff")
-        ).filter(
+        sub = sub.with_columns(_mark_ts_expr(FIRST_CHECKPOINT_HRS).alias("_cutoff")).filter(
             pl.col("snapshot_utc") >= pl.col("made_available_utc"),
             pl.col("snapshot_utc") < pl.col("_cutoff"),
         )
-        return (
-            sub.sort(["loadnumber", "snapshot_utc"])
-            .group_by("loadnumber")
-            .agg(pl.col(col).first().alias(col))
-        )
+        return sub.sort(["loadnumber", "snapshot_utc"]).group_by("loadnumber").agg(pl.col(col).first().alias(col))
 
     sub = sub.with_columns(_mark_ts_expr(mark_hrs).alias("_mark_ts")).filter(
         pl.col("snapshot_utc") >= pl.col("made_available_utc"),
@@ -410,9 +376,7 @@ def _indexed_at_marks_survival(
         for mark in MARK_HRS:
             eligible = _eligible_at_mark(loads, mark)
             snap = _at_mark_survival(df, col, mark, loads)
-            snap = snap.join(eligible, on="loadnumber", how="inner").join(
-                base, on="loadnumber", how="inner"
-            )
+            snap = snap.join(eligible, on="loadnumber", how="inner").join(base, on="loadnumber", how="inner")
             parts.append(
                 snap.select(
                     "loadnumber",
@@ -494,9 +458,7 @@ def build_survival_drift_report(
 ) -> dict[str, Any]:
     """End-to-end survival drift HTML (Braden cohort definition)."""
     use_lake = lake is not None and survival_partitions_exist(lake)
-    ship_months = months_for_survival_read(
-        avail_start, avail_end, lead_max_days=lead_max_days
-    )
+    ship_months = months_for_survival_read(avail_start, avail_end, lead_max_days=lead_max_days)
     if use_lake and not ship_date_start:
         ship_date_start, ship_date_end = infer_ship_window_from_lake(lake)  # type: ignore[arg-type]
 

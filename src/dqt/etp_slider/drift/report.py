@@ -67,11 +67,7 @@ _MARK_ORDER: dict[int, int] = {h: i for i, h in enumerate(MARK_HRS)}
 
 def _sort_by_mark_hrs(df: pl.DataFrame) -> pl.DataFrame:
     """Sort checkpoint rows left-to-right: Available → 7d out → … → 1d out."""
-    return (
-        df.with_columns(pl.col("mark_hrs").replace(_MARK_ORDER).alias("_ord"))
-        .sort("_ord")
-        .drop("_ord")
-    )
+    return df.with_columns(pl.col("mark_hrs").replace(_MARK_ORDER).alias("_ord")).sort("_ord").drop("_ord")
 
 
 BUCKET_LABELS: tuple[str, ...] = (
@@ -104,14 +100,9 @@ def lead_window_ids(
         raise ValueError("per_load missing booking_window_hrs")
     lo_h = min_days * 24
     hi_h = max_days * 24
-    filt = per_load.filter(
-        pl.col("booking_window_hrs").is_between(lo_h, hi_h, closed="both")
-    )
+    filt = per_load.filter(pl.col("booking_window_hrs").is_between(lo_h, hi_h, closed="both"))
     if avail_start is not None:
-        filt = filt.filter(
-            pl.col("made_available_utc")
-            >= pl.lit(datetime.combine(avail_start, datetime.min.time()))
-        )
+        filt = filt.filter(pl.col("made_available_utc") >= pl.lit(datetime.combine(avail_start, datetime.min.time())))
     if avail_end is not None:
         end_dt = datetime.combine(avail_end, datetime.max.time())
         filt = filt.filter(pl.col("made_available_utc") <= pl.lit(end_dt))
@@ -135,11 +126,7 @@ def _at_mark(df: pl.DataFrame, col: str, mark_hrs: int) -> pl.DataFrame:
     if "snapshot_utc" in sub.columns:
         sort_cols.append("snapshot_utc")
     if mark_hrs == 999:
-        return (
-            sub.sort(sort_cols)
-            .group_by("loadnumber")
-            .agg(pl.col(col).first().alias(col))
-        )
+        return sub.sort(sort_cols).group_by("loadnumber").agg(pl.col(col).first().alias(col))
     return (
         sub.filter(pl.col("hours_before_pickup") >= mark_hrs)
         .sort(["loadnumber", "hours_before_pickup"])
@@ -206,12 +193,8 @@ def build_summary(indexed: dict[str, pl.DataFrame]) -> list[dict[str, Any]]:
         n_etp: int | None = None
         for _col, _src, key in METRICS:
             sub = indexed[key]
-            left = sub.filter(pl.col("mark_hrs") == m0).select(
-                "loadnumber", pl.col("val").alias("v0"), pl.col("base")
-            )
-            right = sub.filter(pl.col("mark_hrs") == m1).select(
-                "loadnumber", pl.col("val").alias("v1")
-            )
+            left = sub.filter(pl.col("mark_hrs") == m0).select("loadnumber", pl.col("val").alias("v0"), pl.col("base"))
+            right = sub.filter(pl.col("mark_hrs") == m1).select("loadnumber", pl.col("val").alias("v1"))
             j = left.join(right, on="loadnumber", how="inner")
             amt = j["v1"] - j["v0"]
             pct = amt / j["v0"]
@@ -260,16 +243,8 @@ def build_cohort_meta(
         "mart_ship_start": SHIP_DATE_START,
         "mart_ship_end": SHIP_DATE_END,
         "mart_n_loads": per_load.height,
-        "mart_avail_min": (
-            per_load["made_available_utc"].min().isoformat(sep=" ")
-            if per_load.height
-            else None
-        ),
-        "mart_avail_max": (
-            per_load["made_available_utc"].max().isoformat(sep=" ")
-            if per_load.height
-            else None
-        ),
+        "mart_avail_min": (per_load["made_available_utc"].min().isoformat(sep=" ") if per_load.height else None),
+        "mart_avail_max": (per_load["made_available_utc"].max().isoformat(sep=" ") if per_load.height else None),
         "n_at_availability": n0,
         "n_at_7d_out": n_168,
         "n_at_24h_out": n_last,
@@ -291,12 +266,8 @@ def build_cohort_meta(
 def _enrich_summary_meta(meta: dict[str, Any], summary: list[dict[str, Any]]) -> None:
     """Attach window-table stats used in chart notes."""
     meta["etp50_windows"] = len(summary)
-    meta["etp50_med_zero_windows"] = sum(
-        1 for r in summary if r.get("MED_ETP50_SHIFT_AMT", 0) == 0
-    )
-    meta["etp50_med_max_amt"] = max(
-        (r.get("MED_ETP50_SHIFT_AMT", 0) for r in summary), default=0.0
-    )
+    meta["etp50_med_zero_windows"] = sum(1 for r in summary if r.get("MED_ETP50_SHIFT_AMT", 0) == 0)
+    meta["etp50_med_max_amt"] = max((r.get("MED_ETP50_SHIFT_AMT", 0) for r in summary), default=0.0)
 
 
 MAX_EXPLORER_LOADS_DEFAULT = 5000
@@ -358,9 +329,7 @@ def build_category_breakdown(tail: pl.DataFrame) -> list[dict[str, Any]]:
         return []
     n = tail.height
     stats = (
-        tail.with_columns(
-            pl.col("primary_category").replace(LEGACY_LEADTIME_CATEGORY, "LeadtimeChange")
-        )
+        tail.with_columns(pl.col("primary_category").replace(LEGACY_LEADTIME_CATEGORY, "LeadtimeChange"))
         .group_by("primary_category")
         .agg(
             pl.len().alias("n_loads"),
@@ -382,12 +351,8 @@ def build_category_breakdown(tail: pl.DataFrame) -> list[dict[str, Any]]:
                 "label": CATEGORY_LABELS.get(cat, cat),
                 "n_loads": k,
                 "pct": round(k / n, 4),
-                "avg_shift_amt": round(float(row["avg_shift_amt"]), 2)
-                if row["avg_shift_amt"] is not None
-                else None,
-                "avg_shift_pct": round(float(row["avg_shift_pct"]), 4)
-                if row["avg_shift_pct"] is not None
-                else None,
+                "avg_shift_amt": round(float(row["avg_shift_amt"]), 2) if row["avg_shift_amt"] is not None else None,
+                "avg_shift_pct": round(float(row["avg_shift_pct"]), 4) if row["avg_shift_pct"] is not None else None,
             }
         )
         seen.add(cat)
@@ -402,12 +367,8 @@ def build_category_breakdown(tail: pl.DataFrame) -> list[dict[str, Any]]:
                 "label": CATEGORY_LABELS.get(cat, cat),
                 "n_loads": k,
                 "pct": round(k / n, 4),
-                "avg_shift_amt": round(float(row["avg_shift_amt"]), 2)
-                if row["avg_shift_amt"] is not None
-                else None,
-                "avg_shift_pct": round(float(row["avg_shift_pct"]), 4)
-                if row["avg_shift_pct"] is not None
-                else None,
+                "avg_shift_amt": round(float(row["avg_shift_amt"]), 2) if row["avg_shift_amt"] is not None else None,
+                "avg_shift_pct": round(float(row["avg_shift_pct"]), 4) if row["avg_shift_pct"] is not None else None,
             }
         )
     return out
@@ -581,19 +542,13 @@ def load_feature_snapshots(path: Path, loadnumbers: list[int]) -> pl.DataFrame |
         return None
 
 
-def _checkpoint_feature_values(
-    feat: pl.DataFrame, loadnumber: int
-) -> dict[int, dict[str, Any]]:
+def _checkpoint_feature_values(feat: pl.DataFrame, loadnumber: int) -> dict[int, dict[str, Any]]:
     """Feature levels at each explorer mark for one load."""
     sub = feat.filter(pl.col("loadnumber") == loadnumber)
     if sub.is_empty():
         return {}
     out: dict[int, dict[str, Any]] = {}
-    cols = [
-        c
-        for c in (*ANNOTATION_NUMERIC_COLS, *ANNOTATION_CATEGORICAL_COLS)
-        if c in sub.columns
-    ]
+    cols = [c for c in (*ANNOTATION_NUMERIC_COLS, *ANNOTATION_CATEGORICAL_COLS) if c in sub.columns]
     for mark in MARK_HRS:
         vals: dict[str, Any] = {}
         for col in cols:
@@ -609,9 +564,7 @@ def _checkpoint_feature_values(
     return out
 
 
-def _events_between_checkpoints(
-    v0: dict[str, Any], v1: dict[str, Any], *, mark_hrs: int
-) -> list[dict[str, Any]]:
+def _events_between_checkpoints(v0: dict[str, Any], v1: dict[str, Any], *, mark_hrs: int) -> list[dict[str, Any]]:
     """Material movement-category feature changes observed entering ``mark_hrs``."""
     events: list[dict[str, Any]] = []
     mark_label = MARK_LABELS.get(mark_hrs, str(mark_hrs))
@@ -663,12 +616,7 @@ def _events_between_checkpoints(
                 }
             )
 
-    if (
-        "load_type" in v0
-        and "load_type" in v1
-        and v0["load_type"] != v1["load_type"]
-        and v1["load_type"] is not None
-    ):
+    if "load_type" in v0 and "load_type" in v1 and v0["load_type"] != v1["load_type"] and v1["load_type"] is not None:
         events.append(
             {
                 "mark_hrs": mark_hrs,
@@ -766,11 +714,7 @@ def _hc_gallery_rows(tail: pl.DataFrame, *, n: int = HC_GALLERY_SIZE_DEFAULT) ->
     """Top high-confidence LC loads by ETP50 % shift (avail→48hr)."""
     if tail.is_empty() or "leadtime_isolated_ind" not in tail.columns:
         return pl.DataFrame()
-    return (
-        tail.filter(pl.col("leadtime_isolated_ind") == 1)
-        .sort("etp50_shift_pct", descending=True)
-        .head(n)
-    )
+    return tail.filter(pl.col("leadtime_isolated_ind") == 1).sort("etp50_shift_pct", descending=True).head(n)
 
 
 def build_load_explorer(
@@ -785,14 +729,10 @@ def build_load_explorer(
         return {"catalog": [], "series": {}, "n_total": 0, "n_embedded": 0, "hc_gallery": []}
 
     hc_gallery_df = _hc_gallery_rows(tail, n=hc_gallery_size)
-    embed_ids: set[int] = set(
-        tail.sort("etp50_shift_pct", descending=True).head(max_loads)["loadnumber"].to_list()
-    )
+    embed_ids: set[int] = set(tail.sort("etp50_shift_pct", descending=True).head(max_loads)["loadnumber"].to_list())
     if not hc_gallery_df.is_empty():
         embed_ids.update(int(x) for x in hc_gallery_df["loadnumber"].to_list())
-    tail_sorted = tail.filter(pl.col("loadnumber").is_in(list(embed_ids))).sort(
-        "etp50_shift_pct", descending=True
-    )
+    tail_sorted = tail.filter(pl.col("loadnumber").is_in(list(embed_ids))).sort("etp50_shift_pct", descending=True)
     catalog: list[dict[str, Any]] = []
     series: dict[str, dict[str, Any]] = {}
     from dqt.etp_slider.problem_loads.leadtime import LEADTIME_ARCHETYPE_LABELS
@@ -848,9 +788,7 @@ def build_load_explorer(
         key = str(ln)
         series[key] = {}
         for metric in EXPLORER_METRICS:
-            sub = _sort_by_mark_hrs(
-                indexed[metric].filter(pl.col("loadnumber") == ln)
-            )
+            sub = _sort_by_mark_hrs(indexed[metric].filter(pl.col("loadnumber") == ln))
             if sub.is_empty():
                 continue
             marks = sub["mark_hrs"].to_list()
@@ -858,10 +796,7 @@ def build_load_explorer(
                 "marks": marks,
                 "labels": [MARK_LABELS.get(int(h), str(h)) for h in marks],
                 "idx": [round(float(x), 2) for x in sub["idx"].to_list()],
-                "val": [
-                    round(float(x), 2) if x is not None else None
-                    for x in sub["val"].to_list()
-                ],
+                "val": [round(float(x), 2) if x is not None else None for x in sub["val"].to_list()],
             }
 
     hc_gallery: list[dict[str, Any]] = []
@@ -936,7 +871,7 @@ def _prepare_tail_cohort(
         flag_tail_loads,
     )
 
-    mode: TailThresholdMode = (tail_mode or TAIL_THRESHOLD_MODE_DEFAULT)  # type: ignore[assignment]
+    mode: TailThresholdMode = tail_mode or TAIL_THRESHOLD_MODE_DEFAULT  # type: ignore[assignment]
     if tail_pct is None and tail_amt is None:
         tail_pct = TAIL_PCT_DEFAULT
         tail_amt = TAIL_AMT_DEFAULT
@@ -1008,9 +943,7 @@ def _prepare_tail_cohort(
     if feature_snapshots_path is not None:
         from dqt.etp_slider.movement.feature_path import apply_feature_path_upgrades
 
-        feat = load_feature_snapshots(
-            feature_snapshots_path, tail["loadnumber"].to_list()
-        )
+        feat = load_feature_snapshots(feature_snapshots_path, tail["loadnumber"].to_list())
         tail = apply_feature_path_upgrades(tail, feat)
 
     return assign_movement_category(tail)
@@ -1193,14 +1126,8 @@ def _format_date_span(start: date, end: date) -> str:
     if start.year == end.year and start.month == end.month:
         return f"{start.strftime('%b')} {start.day}–{end.day}, {end.year}"
     if start.year == end.year:
-        return (
-            f"{start.strftime('%b')} {start.day} – "
-            f"{end.strftime('%b')} {end.day}, {end.year}"
-        )
-    return (
-        f"{start.strftime('%b')} {start.day}, {start.year} – "
-        f"{end.strftime('%b')} {end.day}, {end.year}"
-    )
+        return f"{start.strftime('%b')} {start.day} – {end.strftime('%b')} {end.day}, {end.year}"
+    return f"{start.strftime('%b')} {start.day}, {start.year} – {end.strftime('%b')} {end.day}, {end.year}"
 
 
 def apply_report_variant_meta(meta: dict[str, Any], variant: str | None) -> None:
@@ -1262,20 +1189,12 @@ def _ship_window_label(meta: dict[str, Any]) -> str | None:
 def _cohort_strip_html(meta: dict[str, Any]) -> str:
     dates, dates_sub = _cohort_dates(meta)
     lead = f"{meta['lead_min_days']:.0f}–{meta['lead_max_days']:.0f} days"
-    avail_label = (
-        "Final Available window"
-        if meta.get("cohort_mode") == "survival"
-        else "Available window"
-    )
+    avail_label = "Final Available window" if meta.get("cohort_mode") == "survival" else "Available window"
     sub_html = f'<div class="chip-sub">{dates_sub}</div>' if dates_sub else ""
     ship_label = _ship_window_label(meta)
     ship_chip = ""
     if ship_label:
-        ship_lbl = (
-            "Ship-date pull (SF)"
-            if meta.get("cohort_mode") == "survival"
-            else "Mart ship dates"
-        )
+        ship_lbl = "Ship-date pull (SF)" if meta.get("cohort_mode") == "survival" else "Mart ship dates"
         ship_chip = f"""<div class="cohort-chip">
     <div class="chip-label">{ship_lbl}</div>
     <div class="chip-value">{ship_label}</div>
@@ -1284,7 +1203,7 @@ def _cohort_strip_html(meta: dict[str, Any]) -> str:
     if meta.get("report_label"):
         variant_chip = f"""<div class="cohort-chip">
     <div class="chip-label">Report variant</div>
-    <div class="chip-value">{meta['report_label']}</div>
+    <div class="chip-value">{meta["report_label"]}</div>
   </div>"""
     return f"""<div class="cohort-strip">
   {variant_chip}
@@ -1309,9 +1228,7 @@ def _methodology(meta: dict[str, Any]) -> str:
     if meta.get("cohort_mode") == "survival":
         avail_filter = ""
         if meta.get("avail_start") and meta.get("avail_end"):
-            avail_filter = (
-                f"available_on_last between {meta['avail_start']} and {meta['avail_end']}. "
-            )
+            avail_filter = f"available_on_last between {meta['avail_start']} and {meta['avail_end']}. "
         checkpoints = "/".join(str(h) for h in meta["checkpoints_hrs"])
         ship_lo = meta.get("pull_ship_start") or meta["mart_ship_start"]
         ship_hi = meta.get("pull_ship_end") or meta["mart_ship_end"]
@@ -1333,10 +1250,7 @@ def _methodology(meta: dict[str, Any]) -> str:
         )
     avail_filter = ""
     if meta.get("avail_start") and meta.get("avail_end"):
-        avail_filter = (
-            f"Report filter: made_available_utc between {meta['avail_start']} and "
-            f"{meta['avail_end']}. "
-        )
+        avail_filter = f"Report filter: made_available_utc between {meta['avail_start']} and {meta['avail_end']}. "
     checkpoints = "/".join(str(h) for h in meta["checkpoints_hrs"])
     return (
         f"<strong>Mart population</strong> ({meta['mart_n_loads']:,} loads): Covered TL loads with "
@@ -1559,11 +1473,7 @@ def _note_explorer(meta: dict[str, Any]) -> str:
         mode=meta.get("tail_threshold_mode") or TAIL_THRESHOLD_MODE_DEFAULT,
     )
     embedded = meta.get("n_tail_embedded", n)
-    cap = (
-        f" Showing top {embedded:,} by shift magnitude."
-        if embedded < n
-        else ""
-    )
+    cap = f" Showing top {embedded:,} by shift magnitude." if embedded < n else ""
     davis_note = ""
     if not meta.get("davis_cache"):
         davis_note = (
@@ -1701,11 +1611,7 @@ def build_drift_report(
     hist = pl.read_parquet(hist_path)
     feat_df: pl.DataFrame | None = None
     if tail is not None and not tail.is_empty() and feat_path is not None:
-        embedded_ids = (
-            tail.sort("etp50_shift_pct", descending=True)
-            .head(max_explorer_loads)["loadnumber"]
-            .to_list()
-        )
+        embedded_ids = tail.sort("etp50_shift_pct", descending=True).head(max_explorer_loads)["loadnumber"].to_list()
         feat_df = load_feature_snapshots(feat_path, embedded_ids)
     if mde_timeline_cache is None and avail_start is not None and avail_end is not None:
         mde_timeline_cache = hist_path.parent / f"explorer-mde-timeline-{avail_start}_{avail_end}.parquet"
@@ -1730,9 +1636,7 @@ def build_drift_report(
         data_dir=hist_path.parent.parent if hist_path.parent.name == "etp" else hist_path.parent,
     )
     if tail is not None and not tail.is_empty() and "primary_category" in tail.columns:
-        payload["meta"]["n_tail_classified"] = int(
-            tail.filter(pl.col("primary_category") != "Unclassified").height
-        )
+        payload["meta"]["n_tail_classified"] = int(tail.filter(pl.col("primary_category") != "Unclassified").height)
 
     if davis_path is not None and davis_path.exists():
         payload["meta"]["davis_cache"] = str(davis_path)

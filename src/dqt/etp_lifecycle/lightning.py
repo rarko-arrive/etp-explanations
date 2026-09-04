@@ -233,12 +233,7 @@ def aggregate_clhp_misses_weekly(miss: pl.DataFrame) -> pl.DataFrame:
     """Weekly stacked counts by ``miss_driver``."""
     if miss.is_empty() or "week" not in miss.columns:
         return pl.DataFrame()
-    return (
-        miss.group_by("week", "miss_driver")
-        .len()
-        .rename({"len": "n"})
-        .sort("week", "miss_driver")
-    )
+    return miss.group_by("week", "miss_driver").len().rename({"len": "n"}).sort("week", "miss_driver")
 
 
 def summarize_clhp_miss_context(miss: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
@@ -262,10 +257,7 @@ def summarize_clhp_miss_context(miss: pl.DataFrame) -> tuple[pl.DataFrame, pl.Da
             }
         )
     by_driver = (
-        miss.group_by("event_context", "miss_driver")
-        .len()
-        .rename({"len": "n"})
-        .sort("event_context", "miss_driver")
+        miss.group_by("event_context", "miss_driver").len().rename({"len": "n"}).sort("event_context", "miss_driver")
     )
     return pl.DataFrame(rows), by_driver
 
@@ -289,9 +281,7 @@ def sweep_lightning_thresholds(
     n = frame.height
     truth_expr = pl.col(truth_col).fill_null(0) == 1 if truth_col in frame.columns else pl.lit(False)
     shipment_expr = (
-        pl.col("shipment_change_ind").fill_null(0) == 1
-        if "shipment_change_ind" in frame.columns
-        else pl.lit(False)
+        pl.col("shipment_change_ind").fill_null(0) == 1 if "shipment_change_ind" in frame.columns else pl.lit(False)
     )
 
     for pct in grid:
@@ -474,10 +464,7 @@ def lightning_path_checkpoint_events(
                 "delta_usd": delta,
                 "delta_other": rel,
                 "category": "ShipmentChange",
-                "driver_text": (
-                    f"Lightning path {col} {delta:+,.0f} ({rel * 100:.0f}%) "
-                    f"@ {MARK_LABELS.get(m1, m1)}"
-                ),
+                "driver_text": (f"Lightning path {col} {delta:+,.0f} ({rel * 100:.0f}%) @ {MARK_LABELS.get(m1, m1)}"),
                 "confidence": "high",
                 "evidence_cols": [col],
                 "is_pricing_driver": True,

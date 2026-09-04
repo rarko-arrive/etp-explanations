@@ -11,17 +11,11 @@ def _snap_wide(snaps: pl.DataFrame, suffix: str) -> pl.DataFrame:
     """Pivot displayid rows to target1/target3 wide columns."""
     out = snaps.group_by("mde_id", "loadnumber").agg(
         *[
-            pl.col("etpvalue")
-            .filter(pl.col("displayid") == did)
-            .first()
-            .alias(f"target{did}_{suffix}")
+            pl.col("etpvalue").filter(pl.col("displayid") == did).first().alias(f"target{did}_{suffix}")
             for did in _DISPLAY_TARGETS
         ],
         *[
-            pl.col("percentile")
-            .filter(pl.col("displayid") == did)
-            .first()
-            .alias(f"pct{did}_{suffix}")
+            pl.col("percentile").filter(pl.col("displayid") == did).first().alias(f"pct{did}_{suffix}")
             for did in _DISPLAY_TARGETS
         ],
     )
@@ -50,12 +44,8 @@ def enrich_mde_display(events: pl.DataFrame, display: pl.DataFrame) -> pl.DataFr
         ).alias("win_end"),
     )
 
-    scoped = (
-        windows.join(display, on="loadnumber", how="inner")
-        .filter(
-            (pl.col("modified_ts") >= pl.col("win_start"))
-            & (pl.col("modified_ts") <= pl.col("win_end"))
-        )
+    scoped = windows.join(display, on="loadnumber", how="inner").filter(
+        (pl.col("modified_ts") >= pl.col("win_start")) & (pl.col("modified_ts") <= pl.col("win_end"))
     )
 
     pre = (
@@ -69,8 +59,7 @@ def enrich_mde_display(events: pl.DataFrame, display: pl.DataFrame) -> pl.DataFr
     )
     post = (
         scoped.filter(
-            (pl.col("modified_ts") >= pl.col("mde_applied_utc"))
-            & (pl.col("snapshot_mde_id") == pl.col("mde_id"))
+            (pl.col("modified_ts") >= pl.col("mde_applied_utc")) & (pl.col("snapshot_mde_id") == pl.col("mde_id"))
         )
         .sort("modified_ts")
         .group_by("mde_id", "loadnumber", "displayid")

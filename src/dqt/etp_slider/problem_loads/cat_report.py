@@ -170,13 +170,10 @@ def build_collapsed_category_by_volatility(labeled: pl.DataFrame) -> dict[str, l
             out[seg_key] = []
             continue
         n = sub.height
-        stats = (
-            sub.group_by("collapsed_category")
-            .agg(
-                pl.len().alias("n_loads"),
-                pl.col("etp50_shift_amt").mean().alias("avg_shift_amt"),
-                pl.col("etp50_shift_pct").mean().alias("avg_shift_pct"),
-            )
+        stats = sub.group_by("collapsed_category").agg(
+            pl.len().alias("n_loads"),
+            pl.col("etp50_shift_amt").mean().alias("avg_shift_amt"),
+            pl.col("etp50_shift_pct").mean().alias("avg_shift_pct"),
         )
         by_cat = {r["collapsed_category"]: r for r in stats.iter_rows(named=True)}
         rows: list[dict[str, Any]] = []
@@ -218,10 +215,7 @@ def with_attribution_category(df: pl.DataFrame) -> pl.DataFrame:
         .then(pl.lit("LoadFeatures"))
         .when(pl.col("collapsed_category") == "Random")
         .then(pl.lit("Random"))
-        .when(
-            (pl.col("collapsed_category") == "LeadTime")
-            & (pl.col("index_change_ind").fill_null(0) == 1)
-        )
+        .when((pl.col("collapsed_category") == "LeadTime") & (pl.col("index_change_ind").fill_null(0) == 1))
         .then(pl.lit("LeadTimeIndexCooccur"))
         .when(pl.col("collapsed_category") == "LeadTime")
         .then(pl.lit("LeadTimeClockOnly"))
@@ -249,9 +243,7 @@ def _attribution_mae_by_category(
     if problem.is_empty() or "etp50_avail" not in problem.columns:
         return {}
 
-    frame = join_lc_carrier_cost(
-        problem, features_path=features_path, data_dir=data_dir
-    )
+    frame = join_lc_carrier_cost(problem, features_path=features_path, data_dir=data_dir)
     if COST_COL not in frame.columns:
         return {}
 
@@ -264,28 +256,14 @@ def _attribution_mae_by_category(
         )
 
     labeled = with_attribution_category(frame)
-    valid_avail = (
-        pl.col(COST_COL).is_finite()
-        & pl.col("etp50_avail").is_finite()
-        & (pl.col("etp50_avail") > 0)
-    )
+    valid_avail = pl.col(COST_COL).is_finite() & pl.col("etp50_avail").is_finite() & (pl.col("etp50_avail") > 0)
     mae_exprs = [
-        pl.when(valid_avail)
-        .then((pl.col("etp50_avail") - pl.col(COST_COL)).abs())
-        .alias("_mae_avail"),
+        pl.when(valid_avail).then((pl.col("etp50_avail") - pl.col(COST_COL)).abs()).alias("_mae_avail"),
     ]
     agg_exprs = [pl.col("_mae_avail").mean().alias("mae_avail")]
     if "etp50_book" in labeled.columns:
-        valid_book = (
-            pl.col(COST_COL).is_finite()
-            & pl.col("etp50_book").is_finite()
-            & (pl.col("etp50_book") > 0)
-        )
-        mae_exprs.append(
-            pl.when(valid_book)
-            .then((pl.col("etp50_book") - pl.col(COST_COL)).abs())
-            .alias("_mae_book")
-        )
+        valid_book = pl.col(COST_COL).is_finite() & pl.col("etp50_book").is_finite() & (pl.col("etp50_book") > 0)
+        mae_exprs.append(pl.when(valid_book).then((pl.col("etp50_book") - pl.col(COST_COL)).abs()).alias("_mae_book"))
         agg_exprs.append(pl.col("_mae_book").mean().alias("mae_book"))
     labeled = labeled.with_columns(*mae_exprs)
     stats = labeled.group_by("attribution_category").agg(*agg_exprs)
@@ -306,13 +284,10 @@ def build_attribution_problem_breakdown(
         return []
     labeled = with_attribution_category(problem)
     n = labeled.height
-    stats = (
-        labeled.group_by("attribution_category")
-        .agg(
-            pl.len().alias("n_loads"),
-            pl.col("etp50_shift_amt").mean().alias("avg_shift_amt"),
-            pl.col("etp50_shift_pct").mean().alias("avg_shift_pct"),
-        )
+    stats = labeled.group_by("attribution_category").agg(
+        pl.len().alias("n_loads"),
+        pl.col("etp50_shift_amt").mean().alias("avg_shift_amt"),
+        pl.col("etp50_shift_pct").mean().alias("avg_shift_pct"),
     )
     by_cat = {r["attribution_category"]: r for r in stats.iter_rows(named=True)}
     mae_by_cat = _attribution_mae_by_category(
@@ -334,12 +309,8 @@ def build_attribution_problem_breakdown(
             "label": ATTRIBUTION_LABELS[cat],
             "n_loads": k,
             "pct": round(k / n, 4),
-            "avg_shift_amt": round(float(row["avg_shift_amt"]), 2)
-            if row["avg_shift_amt"] is not None
-            else None,
-            "avg_shift_pct": round(float(row["avg_shift_pct"]), 4)
-            if row["avg_shift_pct"] is not None
-            else None,
+            "avg_shift_amt": round(float(row["avg_shift_amt"]), 2) if row["avg_shift_amt"] is not None else None,
+            "avg_shift_pct": round(float(row["avg_shift_pct"]), 4) if row["avg_shift_pct"] is not None else None,
         }
         mae_row = mae_by_cat.get(cat)
         if mae_row:
@@ -357,13 +328,10 @@ def build_collapsed_problem_breakdown(problem: pl.DataFrame) -> list[dict[str, A
         return []
     labeled = with_collapsed_category(problem)
     n = labeled.height
-    stats = (
-        labeled.group_by("collapsed_category")
-        .agg(
-            pl.len().alias("n_loads"),
-            pl.col("etp50_shift_amt").mean().alias("avg_shift_amt"),
-            pl.col("etp50_shift_pct").mean().alias("avg_shift_pct"),
-        )
+    stats = labeled.group_by("collapsed_category").agg(
+        pl.len().alias("n_loads"),
+        pl.col("etp50_shift_amt").mean().alias("avg_shift_amt"),
+        pl.col("etp50_shift_pct").mean().alias("avg_shift_pct"),
     )
     by_cat = {r["collapsed_category"]: r for r in stats.iter_rows(named=True)}
     out: list[dict[str, Any]] = []
@@ -378,12 +346,8 @@ def build_collapsed_problem_breakdown(problem: pl.DataFrame) -> list[dict[str, A
                 "label": COLLAPSED_LABELS[cat],
                 "n_loads": k,
                 "pct": round(k / n, 4),
-                "avg_shift_amt": round(float(row["avg_shift_amt"]), 2)
-                if row["avg_shift_amt"] is not None
-                else None,
-                "avg_shift_pct": round(float(row["avg_shift_pct"]), 4)
-                if row["avg_shift_pct"] is not None
-                else None,
+                "avg_shift_amt": round(float(row["avg_shift_amt"]), 2) if row["avg_shift_amt"] is not None else None,
+                "avg_shift_pct": round(float(row["avg_shift_pct"]), 4) if row["avg_shift_pct"] is not None else None,
             }
         )
     return out
@@ -397,10 +361,7 @@ def build_collapsed_segment_overview(labeled: pl.DataFrame) -> pl.DataFrame:
     n_parent = framed.height
     cat_sizes = {
         r["collapsed_category"]: int(r["n_category"])
-        for r in framed.group_by("collapsed_category")
-        .len()
-        .rename({"len": "n_category"})
-        .iter_rows(named=True)
+        for r in framed.group_by("collapsed_category").len().rename({"len": "n_category"}).iter_rows(named=True)
     }
     rows: list[dict[str, Any]] = []
     for cat in COLLAPSED_ORDER:
@@ -464,9 +425,7 @@ def build_collapsed_segment_pivot(labeled: pl.DataFrame) -> list[dict[str, Any]]
 
 
 def _problem_subset(labeled: pl.DataFrame, collapsed: str) -> pl.DataFrame:
-    return with_collapsed_category(labeled.filter(pl.col("is_tail"))).filter(
-        pl.col("collapsed_category") == collapsed
-    )
+    return with_collapsed_category(labeled.filter(pl.col("is_tail"))).filter(pl.col("collapsed_category") == collapsed)
 
 
 def _parent_subset(labeled: pl.DataFrame, collapsed: str) -> pl.DataFrame:
@@ -479,9 +438,7 @@ def build_load_features_breakdown(labeled: pl.DataFrame) -> list[dict[str, Any]]
         return []
     n = subset.height
     parent_dir = shift_direction_by_group(
-        _parent_subset(labeled, "LoadFeatures").with_columns(
-            normalize_primary().alias("primary_category")
-        ),
+        _parent_subset(labeled, "LoadFeatures").with_columns(normalize_primary().alias("primary_category")),
         "primary_category",
     )
     stats = (
@@ -507,12 +464,8 @@ def build_load_features_breakdown(labeled: pl.DataFrame) -> list[dict[str, Any]]
                 "label": _LOAD_FEATURE_LABELS[cat],
                 "n_loads": k,
                 "pct_of_group": round(k / n, 4),
-                "avg_shift_amt": round(float(row["avg_shift_amt"]), 2)
-                if row["avg_shift_amt"] is not None
-                else None,
-                "avg_shift_pct": round(float(row["avg_shift_pct"]), 4)
-                if row["avg_shift_pct"] is not None
-                else None,
+                "avg_shift_amt": round(float(row["avg_shift_amt"]), 2) if row["avg_shift_amt"] is not None else None,
+                "avg_shift_pct": round(float(row["avg_shift_pct"]), 4) if row["avg_shift_pct"] is not None else None,
                 "pct_shift_positive": direction.get("pct_shift_positive"),
                 "pct_shift_negative": direction.get("pct_shift_negative"),
             }
@@ -609,8 +562,7 @@ def build_category_details(
         )
         if not arch_pricing.is_empty():
             p50 = {
-                r["path_archetype"]: r
-                for r in arch_pricing.filter(pl.col("quote") == "etp50").iter_rows(named=True)
+                r["path_archetype"]: r for r in arch_pricing.filter(pl.col("quote") == "etp50").iter_rows(named=True)
             }
             enriched: list[dict[str, Any]] = []
             for row in leadtime_rows:
@@ -682,17 +634,13 @@ def build_cat_report_payload(
     overview = shift_magnitude_stats(problem)
     lc_row = (
         build_collapsed_segment_overview(labeled)
-        .filter(
-            (pl.col("collapsed_category") == "LeadTime") & (pl.col("segment") == "problem")
-        )
+        .filter((pl.col("collapsed_category") == "LeadTime") & (pl.col("segment") == "problem"))
         .to_dicts()
     )
     lc_n = int(lc_row[0]["n_loads"]) if lc_row else 0
     lc_avg = float(lc_row[0].get("avg_shift_amt") or 0) if lc_row else 0.0
 
-    problem_lc = problem.filter(
-        pl.col("primary_category").is_in({"LeadtimeChange", LEGACY_LEADTIME_CATEGORY})
-    )
+    problem_lc = problem.filter(pl.col("primary_category").is_in({"LeadtimeChange", LEGACY_LEADTIME_CATEGORY}))
     if "leadtime_isolated_ind" in problem_lc.columns:
         lc_hc_df = problem_lc.filter(pl.col("leadtime_isolated_ind") == 1)
     elif "index_change_ind" in problem_lc.columns:
@@ -703,9 +651,7 @@ def build_cat_report_payload(
     lc_hc_avg_amt = round(float(lc_hc_df["etp50_shift_amt"].mean() or 0), 2) if lc_hc_n else 0.0
     lc_hc_avg_pct = round(float(lc_hc_df["etp50_shift_pct"].mean() or 0), 4) if lc_hc_n else 0.0
     lc_hc_avg_etp = (
-        round(float(lc_hc_df["etp50_avail"].mean() or 0), 2)
-        if lc_hc_n and "etp50_avail" in lc_hc_df.columns
-        else None
+        round(float(lc_hc_df["etp50_avail"].mean() or 0), 2) if lc_hc_n and "etp50_avail" in lc_hc_df.columns else None
     )
 
     # Preserve four-way segment table for reference / QA
@@ -816,9 +762,7 @@ def write_cat_report_html(
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Build payload and write standalone HTML report."""
-    payload = build_cat_report_payload(
-        labeled, include_volatility_layer=include_volatility_layer, **kwargs
-    )
+    payload = build_cat_report_payload(labeled, include_volatility_layer=include_volatility_layer, **kwargs)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(render_cat_report_html(payload))

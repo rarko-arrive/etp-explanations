@@ -87,10 +87,7 @@ FEATURE_CATALOG: list[dict[str, Any]] = [
         "movement_category_name": "Changes in load features correlated with time",
         "priority": "P0",
         "status": "mapped",
-        "notes": (
-            "Equipment passed to each ETP call; codes V/R/PO/… "
-            "(not core.loads.load_type DRY/REEFER labels)"
-        ),
+        "notes": ("Equipment passed to each ETP call; codes V/R/PO/… (not core.loads.load_type DRY/REEFER labels)"),
     },
     {
         "doc_name": "Total Charges",
@@ -235,10 +232,7 @@ MODEL_CALL_COLS = (
 def feature_catalog_payload() -> dict[str, Any]:
     return {
         "version": 2,
-        "source": (
-            "etp-changing.md + etp_model_logs.features_used inventory "
-            "(2026-08 sample, 104 keys)"
-        ),
+        "source": ("etp-changing.md + etp_model_logs.features_used inventory (2026-08 sample, 104 keys)"),
         "related_playbooks": [
             ".ai/plans/etp-slider-leadtime/analytics-mart.md",
             ".ai/plans/etp-slider/feature-impact.md",
@@ -268,11 +262,7 @@ def load_feature_catalog(path: Path | None = None) -> dict[str, Any]:
 
 def mapped_mart_columns(catalog: dict[str, Any] | None = None) -> list[str]:
     cat = catalog or feature_catalog_payload()
-    return [
-        f["mart_column"]
-        for f in cat["features"]
-        if f.get("status") == "mapped" and f.get("mart_column")
-    ]
+    return [f["mart_column"] for f in cat["features"] if f.get("status") == "mapped" and f.get("mart_column")]
 
 
 def nearest_anchor(
@@ -299,9 +289,7 @@ def nearest_anchor(
             )
         )
     return (
-        df.with_columns(
-            (pl.col("hours_since_available") - target_hsa).abs().alias("_dist")
-        )
+        df.with_columns((pl.col("hours_since_available") - target_hsa).abs().alias("_dist"))
         .sort([ID_COL, "_dist", "snapshot_utc"])
         .group_by(ID_COL)
         .agg(
@@ -335,9 +323,7 @@ def consecutive_feature_deltas(
     ]
     for c in cols:
         if c in frame.columns and frame.schema[c].is_numeric():
-            exprs.append(
-                (pl.col(c) - pl.col(c).shift(1).over(ID_COL)).alias(f"delta_{c}")
-            )
+            exprs.append((pl.col(c) - pl.col(c).shift(1).over(ID_COL)).alias(f"delta_{c}"))
 
     out = frame.with_columns(exprs).filter(pl.col("snapshot_utc_t0").is_not_null())
     keep = [
@@ -376,11 +362,7 @@ def decomp_by_day(
     if deltas.is_empty() or by not in deltas.columns:
         return pl.DataFrame()
 
-    delta_cols = [
-        c
-        for c in deltas.columns
-        if c.startswith("delta_") and c not in ("delta_etp50", "delta_etp10")
-    ]
+    delta_cols = [c for c in deltas.columns if c.startswith("delta_") and c not in ("delta_etp50", "delta_etp10")]
     rows: list[dict[str, Any]] = []
 
     strata: list[Any]
@@ -391,11 +373,7 @@ def decomp_by_day(
         stratum_col = None
 
     for stratum in strata:
-        base_df = (
-            deltas.filter(pl.col(stratum_col) == stratum)
-            if stratum_col is not None
-            else deltas
-        )
+        base_df = deltas.filter(pl.col(stratum_col) == stratum) if stratum_col is not None else deltas
         for day in sorted(base_df.get_column(by).drop_nulls().unique().to_list()):
             sub = base_df.filter(pl.col(by) == day)
             if sub.height < min_rows:

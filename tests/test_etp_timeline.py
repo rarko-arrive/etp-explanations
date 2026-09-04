@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from dqt.etp_lake import EtpLake
@@ -66,9 +64,7 @@ class TestEtpTimeline:
     def test_escape_mpl_text_dollar_amounts(self) -> None:
         from dqt.viz import escape_mpl_text
 
-        assert escape_mpl_text("$+294 (+43.2%) · covered cost $1,650") == (
-            r"\$+294 (+43.2%) · covered cost \$1,650"
-        )
+        assert escape_mpl_text("$+294 (+43.2%) · covered cost $1,650") == (r"\$+294 (+43.2%) · covered cost \$1,650")
 
     def test_missing_load_raises(self, timeline_lake: EtpLake) -> None:
         with pytest.raises(ValueError, match="No ETP history"):

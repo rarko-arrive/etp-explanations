@@ -1,0 +1,37 @@
+# Local hooks: uv run pre-commit install  (also run by make install)
+# Manual full-repo pass: make pre-commit
+
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^notebooks/
+      - id: end-of-file-fixer
+        exclude: ^notebooks/
+      - id: check-yaml
+        args: [--unsafe]  # allow custom tags in drift report templates if any
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.12
+    hooks:
+      - id: ruff-check
+        name: ruff lint
+        args: [--fix, --unsafe-fixes]
+        files: ^(src/|scripts/|app/|tests/)
+      - id: ruff-format
+        name: ruff format
+        files: ^(src/|scripts/|app/|tests/)
+
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 3.4.2
+    hooks:
+      - id: sqlfluff-lint
+        name: sqlfluff
+        files: ^SQL/

@@ -34,7 +34,20 @@ dev = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "httpx>=0.28.0",
+    "pre-commit>=4.0.0",
+    "sqlfluff>=3.4.0",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
 
 [tool.ruff.lint]
 ignore = ["C408", "RUF046"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/**/*.py" = ["E402"]
+"src/dqt/etp_slider/drift/mde_timeline.py" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"

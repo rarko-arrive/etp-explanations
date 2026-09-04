@@ -74,11 +74,7 @@ def _at_mark(df: pl.DataFrame, col: str, mark_hrs: int) -> pl.DataFrame:
     if "snapshot_utc" in sub.columns:
         sort_cols.append("snapshot_utc")
     if mark_hrs == 999:
-        return (
-            sub.sort(sort_cols)
-            .group_by(ID_COL)
-            .agg(pl.col(col).first().alias(col))
-        )
+        return sub.sort(sort_cols).group_by(ID_COL).agg(pl.col(col).first().alias(col))
     return (
         sub.filter(pl.col("hours_before_pickup") >= mark_hrs)
         .sort([ID_COL, "hours_before_pickup"])
@@ -110,9 +106,7 @@ def _join_model_audit(hist: pl.DataFrame) -> pl.DataFrame:
     audit = _last_per_hbp(hist, "audit", ["target1", "target3"])
     if model.is_empty():
         return pl.DataFrame()
-    out = model.join(audit, on="hours_before_pickup", how="left").sort(
-        "hours_before_pickup", descending=True
-    )
+    out = model.join(audit, on="hours_before_pickup", how="left").sort("hours_before_pickup", descending=True)
     if "target1" in out.columns and "etp50" in out.columns:
         out = out.with_columns(
             (pl.col("target1") - pl.col("etp50")).alias("t1_gap"),
@@ -126,11 +120,7 @@ def _checkpoint_feature_values(feat: pl.DataFrame, loadnumber: int) -> dict[int,
     if sub.is_empty():
         return {}
     out: dict[int, dict[str, Any]] = {}
-    cols = [
-        c
-        for c in (*_ANNOTATION_NUMERIC_COLS, *_ANNOTATION_CATEGORICAL_COLS, *_CLOCK_COLS)
-        if c in sub.columns
-    ]
+    cols = [c for c in (*_ANNOTATION_NUMERIC_COLS, *_ANNOTATION_CATEGORICAL_COLS, *_CLOCK_COLS) if c in sub.columns]
     for mark in MARK_HRS:
         vals: dict[str, Any] = {}
         for col in cols:
@@ -143,9 +133,7 @@ def _checkpoint_feature_values(feat: pl.DataFrame, loadnumber: int) -> dict[int,
     return out
 
 
-def _events_between_checkpoints(
-    v0: dict[str, Any], v1: dict[str, Any], *, mark_hrs: int
-) -> list[dict[str, Any]]:
+def _events_between_checkpoints(v0: dict[str, Any], v1: dict[str, Any], *, mark_hrs: int) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     mark_label = MARK_LABELS.get(mark_hrs, str(mark_hrs))
 
@@ -173,12 +161,7 @@ def _events_between_checkpoints(
                 }
             )
 
-    if (
-        "load_type" in v0
-        and "load_type" in v1
-        and v0["load_type"] != v1["load_type"]
-        and v1["load_type"] is not None
-    ):
+    if "load_type" in v0 and "load_type" in v1 and v0["load_type"] != v1["load_type"] and v1["load_type"] is not None:
         events.append(
             {
                 "mark_hrs": mark_hrs,
@@ -403,9 +386,7 @@ def _attach_timeline_x(display: pl.DataFrame, checkpoints: pl.DataFrame) -> pl.D
     """Map checkpoints to a forward lifecycle x-coordinate (hours since available)."""
     if "hours_since_available" not in display.columns:
         return checkpoints.with_columns(pl.col("hours_before_pickup").alias("timeline_x"))
-    hsa_map = display.select("hours_before_pickup", "hours_since_available").unique(
-        "hours_before_pickup", keep="last"
-    )
+    hsa_map = display.select("hours_before_pickup", "hours_since_available").unique("hours_before_pickup", keep="last")
     avail_x = int(display["hours_since_available"].min())
     cp = checkpoints.join(hsa_map, on="hours_before_pickup", how="left")
     return cp.with_columns(
@@ -562,9 +543,7 @@ def build_load_timeline(
     clock_events = _clock_events(checkpoints)
     etp_impacts = _checkpoint_etp_impacts(checkpoints)
     display_events = _display_gap_events(display) + _display_checkpoint_labels(checkpoints)
-    mde_events, mde_meta = _load_mde_for_load(
-        lake, loadnumber, mde_cache=mde_cache, query_sf=query_mde
-    )
+    mde_events, mde_meta = _load_mde_for_load(lake, loadnumber, mde_cache=mde_cache, query_sf=query_mde)
 
     endpoint: dict[str, Any] | None = None
     try:
@@ -618,7 +597,9 @@ def build_load_timeline(
                 summary["t1_gap_mean"] = float(gaps["t1_gap"].mean())
                 summary["t3_gap_mean"] = float(gaps["t3_gap"].mean())
                 summary["t1_gap_avail"] = float(avail["t1_gap"][0]) if avail.height else None
-                summary["t3_gap_avail"] = float(avail["t3_gap"][0]) if avail.height and "t3_gap" in avail.columns else None
+                summary["t3_gap_avail"] = (
+                    float(avail["t3_gap"][0]) if avail.height and "t3_gap" in avail.columns else None
+                )
 
     if endpoint:
         for k in ("target1_shift_pct", "target3_shift_pct", "target_pullback_ind"):
@@ -633,9 +614,7 @@ def build_load_timeline(
         else pl.DataFrame()
     )
     top_steps = (
-        deltas.filter(pl.col("delta_etp50").abs() >= _ETP_IMPACT_MIN_USD)
-        .sort("delta_etp50", descending=True)
-        .head(5)
+        deltas.filter(pl.col("delta_etp50").abs() >= _ETP_IMPACT_MIN_USD).sort("delta_etp50", descending=True).head(5)
         if not deltas.is_empty()
         else pl.DataFrame()
     )
@@ -708,9 +687,7 @@ def plot_etp_timeline(
     """Plot model ETP + audit display targets with checkpoint inflections."""
     import matplotlib.pyplot as plt
 
-    payload = build_load_timeline(
-        lake, loadnumber, mde_cache=mde_cache, query_mde=query_mde
-    )
+    payload = build_load_timeline(lake, loadnumber, mde_cache=mde_cache, query_mde=query_mde)
     display = payload["display"]
     checkpoints = payload["checkpoints"]
     if display.is_empty() or checkpoints.is_empty():
@@ -721,11 +698,7 @@ def plot_etp_timeline(
         if "hours_since_available" in display.columns
         else display.sort("hours_before_pickup", descending=True)
     )
-    x_col = (
-        "hours_since_available"
-        if "hours_since_available" in plot_display.columns
-        else "hours_before_pickup"
-    )
+    x_col = "hours_since_available" if "hours_since_available" in plot_display.columns else "hours_before_pickup"
     cp = _attach_timeline_x(display, checkpoints).sort("timeline_x")
     x = plot_display[x_col].to_list()
 
@@ -738,7 +711,9 @@ def plot_etp_timeline(
         gridspec_kw={"height_ratios": [2.4, 1.2], "hspace": 0.08},
     )
 
-    ax1.plot(x, plot_display["etp50"].to_list(), color=C_ETP, linewidth=2.2, marker=".", markersize=4, label="Model ETP50")
+    ax1.plot(
+        x, plot_display["etp50"].to_list(), color=C_ETP, linewidth=2.2, marker=".", markersize=4, label="Model ETP50"
+    )
     if "target3" in plot_display.columns and plot_display["target3"].null_count() < plot_display.height:
         ax1.plot(
             x,
@@ -760,9 +735,7 @@ def plot_etp_timeline(
             label="Audit Target 1 (display)",
         )
 
-    realized_cost = _resolve_realized_cost(
-        loadnumber, payload.get("endpoint"), data_dir=data_dir
-    )
+    realized_cost = _resolve_realized_cost(loadnumber, payload.get("endpoint"), data_dir=data_dir)
     if realized_cost is not None:
         ax1.axhline(
             realized_cost,
@@ -780,14 +753,8 @@ def plot_etp_timeline(
         gap_note = ""
         if sm.get("t1_gap_mean") is not None:
             gap_note = f" · T1 display avg {sm['t1_gap_mean']:+,.0f} vs model"
-        cost_note = (
-            f" · covered cost ${realized_cost:,.0f}"
-            if realized_cost is not None
-            else ""
-        )
-        subtitle = (
-            f"model avail→48hr: ${sm['shift_amt']:+,.0f} ({sm['shift_pct'] * 100:+.1f}%){gap_note}{cost_note}  ·  {mde_note}"
-        )
+        cost_note = f" · covered cost ${realized_cost:,.0f}" if realized_cost is not None else ""
+        subtitle = f"model avail→48hr: ${sm['shift_amt']:+,.0f} ({sm['shift_pct'] * 100:+.1f}%){gap_note}{cost_note}  ·  {mde_note}"
     elif realized_cost is not None:
         subtitle = f"covered carrier cost ${realized_cost:,.0f}  ·  {mde_note}"
     else:
@@ -842,12 +809,7 @@ def plot_etp_timeline(
     )
     ax2.set_xlabel(x_label)
 
-    events = (
-        payload["feature_events"]
-        + payload["clock_events"]
-        + payload["display_events"]
-        + payload["mde_events"]
-    )
+    events = payload["feature_events"] + payload["clock_events"] + payload["display_events"] + payload["mde_events"]
     mark_x = {int(r["mark_hrs"]): float(r["timeline_x"]) for r in cp.iter_rows(named=True)}
     y_cursor = 0.0
     for ev in sorted(events, key=lambda e: mark_x.get(int(e["mark_hrs"]), 0.0)):

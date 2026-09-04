@@ -92,8 +92,7 @@ def _require_impact():
         )
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
-            "dqt.etp_impact is not bundled in etp-explanations "
-            "(only needed for lake build / feature_impact API)"
+            "dqt.etp_impact is not bundled in etp-explanations (only needed for lake build / feature_impact API)"
         ) from exc
     return build_feature_impact, impact_paths, read_feature_impact
 
@@ -103,8 +102,7 @@ def _require_funnel():
         from dqt.etp_funnel import build_funnel_attrs, funnel_paths, read_funnel
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
-            "dqt.etp_funnel is not bundled in etp-explanations "
-            "(only needed for lake build / funnel API)"
+            "dqt.etp_funnel is not bundled in etp-explanations (only needed for lake build / funnel API)"
         ) from exc
     return build_funnel_attrs, funnel_paths, read_funnel
 
@@ -389,11 +387,7 @@ def parse_stages(raw: str | Sequence[str] | None) -> tuple[str, ...]:
 
 def ship_month_from_pickup(expr: pl.Expr) -> pl.Expr:
     """YYYY-MM from pickup timestamp; null → unknown."""
-    return (
-        expr.cast(pl.Datetime(time_unit="us"), strict=False)
-        .dt.strftime("%Y-%m")
-        .fill_null(UNKNOWN_SHIP_MONTH)
-    )
+    return expr.cast(pl.Datetime(time_unit="us"), strict=False).dt.strftime("%Y-%m").fill_null(UNKNOWN_SHIP_MONTH)
 
 
 def load_ship_months(per_load: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
@@ -401,17 +395,11 @@ def load_ship_months(per_load: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
     lf = per_load.lazy() if isinstance(per_load, pl.DataFrame) else per_load
     cols = lf.collect_schema().names()
     if "pickup_appt_latest_utc" not in cols:
-        return (
-            lf.select(pl.col(ID_COL))
-            .unique()
-            .with_columns(pl.lit(UNKNOWN_SHIP_MONTH).alias("ship_month"))
-        )
+        return lf.select(pl.col(ID_COL)).unique().with_columns(pl.lit(UNKNOWN_SHIP_MONTH).alias("ship_month"))
     return (
         lf.select(ID_COL, "pickup_appt_latest_utc")
         .unique(subset=[ID_COL])
-        .with_columns(
-            ship_month_from_pickup(pl.col("pickup_appt_latest_utc")).alias("ship_month")
-        )
+        .with_columns(ship_month_from_pickup(pl.col("pickup_appt_latest_utc")).alias("ship_month"))
         .select(ID_COL, "ship_month")
     )
 
@@ -422,9 +410,7 @@ def attach_ship_month(
 ) -> pl.LazyFrame:
     hist = history.lazy() if isinstance(history, pl.DataFrame) else history
     months = load_ship_months(per_load)
-    return hist.join(months, on=ID_COL, how="left").with_columns(
-        pl.col("ship_month").fill_null(UNKNOWN_SHIP_MONTH)
-    )
+    return hist.join(months, on=ID_COL, how="left").with_columns(pl.col("ship_month").fill_null(UNKNOWN_SHIP_MONTH))
 
 
 def compute_etp_stats(
@@ -445,15 +431,8 @@ def compute_etp_stats(
     audit_parts: list[pl.DataFrame] = []
     for i in range(0, len(load_ids), batch_size):
         batch = load_ids[i : i + batch_size]
-        etp_parts.append(
-            model.filter(pl.col(ID_COL).is_in(batch)).group_by(ID_COL).agg(ETP_AGG).collect()
-        )
-        audit_parts.append(
-            audit.filter(pl.col(ID_COL).is_in(batch))
-            .group_by(ID_COL)
-            .agg(AUDIT_AGG)
-            .collect()
-        )
+        etp_parts.append(model.filter(pl.col(ID_COL).is_in(batch)).group_by(ID_COL).agg(ETP_AGG).collect())
+        audit_parts.append(audit.filter(pl.col(ID_COL).is_in(batch)).group_by(ID_COL).agg(AUDIT_AGG).collect())
 
     etp_stats = pl.concat(etp_parts) if etp_parts else pl.DataFrame()
     audit_stats = pl.concat(audit_parts) if audit_parts else pl.DataFrame()
@@ -513,11 +492,7 @@ def partition_snapshots(
     counts: dict[str, int] = {}
     for key_s in sorted(months.get_column("ship_month").unique().to_list()):
         ids = months.filter(pl.col("ship_month") == key_s).select(ID_COL)
-        part = (
-            hist.join(ids.lazy(), on=ID_COL, how="inner")
-            .with_columns(pl.lit(key_s).alias("ship_month"))
-            .collect()
-        )
+        part = hist.join(ids.lazy(), on=ID_COL, how="inner").with_columns(pl.lit(key_s).alias("ship_month")).collect()
         if part.is_empty():
             continue
         part_dir = out_dir / f"ship_month={key_s}"
@@ -675,9 +650,7 @@ def pull_feature_history(
             _clear_hive_dir(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        for win_start, win_end, ship_month in _month_windows(
-            ship_date_start, ship_date_end
-        ):
+        for win_start, win_end, ship_month in _month_windows(ship_date_start, ship_date_end):
             part_dir = out_dir / f"ship_month={ship_month}"
             part_path = part_dir / "part-0.parquet"
             if part_path.exists() and not force:
@@ -690,12 +663,12 @@ def pull_feature_history(
                 win_end,
             )
             df = query_sf(
-                    sql_path,
-                    params={
-                        "ship_date_start": win_start,
-                        "ship_date_end": win_end,
-                    },
-                )
+                sql_path,
+                params={
+                    "ship_date_start": win_start,
+                    "ship_date_end": win_end,
+                },
+            )
             frame = df if isinstance(df, pl.DataFrame) else pl.from_pandas(df)
             if "ship_month" not in frame.columns:
                 frame = frame.with_columns(pl.lit(ship_month).alias("ship_month"))
@@ -781,9 +754,7 @@ def build_analytics_mart(
                 per = pl.scan_parquet(paths.per_load_cache)
             else:
                 per = hist.select(ID_COL).unique()
-            counts = partition_snapshots(
-                hist, per, paths.feature_snapshots, force=force
-            )
+            counts = partition_snapshots(hist, per, paths.feature_snapshots, force=force)
             summary["feature_snapshot_counts"] = counts
             del hist, per
             gc.collect()
@@ -825,9 +796,7 @@ def build_analytics_mart(
         out = paths.feature_deltas / f"ship_month={ship_month}" / "part-0.parquet"
         _write_parquet_zstd(deltas, out)
         total_delta += deltas.height
-        decomp_parts.append(
-            decomp_by_day(deltas, by="prebook_day", catalog=catalog, min_rows=1)
-        )
+        decomp_parts.append(decomp_by_day(deltas, by="prebook_day", catalog=catalog, min_rows=1))
         if "is_hyperlocal" in deltas.columns:
             decomp_hl_parts.append(
                 decomp_by_day(
@@ -848,9 +817,7 @@ def build_analytics_mart(
         _write_parquet_zstd(decomp, paths.decomp_by_day_path)
         summary["n_decomp_rows"] = decomp.height
     if decomp_hl_parts:
-        decomp_hl = pl.concat(
-            [d for d in decomp_hl_parts if not d.is_empty()], how="diagonal_relaxed"
-        )
+        decomp_hl = pl.concat([d for d in decomp_hl_parts if not d.is_empty()], how="diagonal_relaxed")
         hl_path = paths.mart / "decomp_by_day_hyperlocal.parquet"
         _write_parquet_zstd(decomp_hl, hl_path)
         summary["n_decomp_hyperlocal_rows"] = decomp_hl.height
@@ -900,15 +867,9 @@ def build_duckdb_catalog(
                 """
             )
 
-        per = (
-            paths.read_per_load_lake
-            if paths.read_per_load_lake.exists()
-            else paths.per_load_cache
-        )
+        per = paths.read_per_load_lake if paths.read_per_load_lake.exists() else paths.per_load_cache
         if per.exists():
-            con.execute(
-                f"CREATE OR REPLACE VIEW endpoints AS SELECT * FROM read_parquet('{per}')"
-            )
+            con.execute(f"CREATE OR REPLACE VIEW endpoints AS SELECT * FROM read_parquet('{per}')")
 
         surv_hist_glob = paths.survival_history_glob()
         if any(paths.read_survival_history.glob("ship_month=*/*.parquet")):
@@ -929,23 +890,18 @@ def build_duckdb_catalog(
 
         if paths.read_etp_stats_path.exists():
             con.execute(
-                f"CREATE OR REPLACE VIEW etp_stats AS "
-                f"SELECT * FROM read_parquet('{paths.read_etp_stats_path}')"
+                f"CREATE OR REPLACE VIEW etp_stats AS SELECT * FROM read_parquet('{paths.read_etp_stats_path}')"
             )
 
         features = paths.data_dir / "features.parquet"
         if features.exists():
-            con.execute(
-                f"CREATE OR REPLACE VIEW features AS SELECT * FROM read_parquet('{features}')"
-            )
+            con.execute(f"CREATE OR REPLACE VIEW features AS SELECT * FROM read_parquet('{features}')")
 
         dial = paths.data_dir / "dqt_alt_percentiles.parquet"
         if not dial.exists():
             dial = paths.cache_dir / "dqt_alt_percentiles.parquet"
         if dial.exists():
-            con.execute(
-                f"CREATE OR REPLACE VIEW dial_history AS SELECT * FROM read_parquet('{dial}')"
-            )
+            con.execute(f"CREATE OR REPLACE VIEW dial_history AS SELECT * FROM read_parquet('{dial}')")
 
         for name in (
             "hybrid_quantiles",
@@ -956,16 +912,12 @@ def build_duckdb_catalog(
         ):
             pred = paths.data_dir / f"{name}.parquet"
             if pred.exists():
-                con.execute(
-                    f"CREATE OR REPLACE VIEW {name} AS SELECT * FROM read_parquet('{pred}')"
-                )
+                con.execute(f"CREATE OR REPLACE VIEW {name} AS SELECT * FROM read_parquet('{pred}')")
 
         if any(paths.read_leadtime.glob("*.parquet")):
             for p in sorted(paths.read_leadtime.glob("*.parquet")):
                 view = "leadtime_" + p.stem.replace("-", "_")
-                con.execute(
-                    f"CREATE OR REPLACE VIEW {view} AS SELECT * FROM read_parquet('{p}')"
-                )
+                con.execute(f"CREATE OR REPLACE VIEW {view} AS SELECT * FROM read_parquet('{p}')")
 
         feat_glob = paths.read_feature_snapshots_glob()
         if any(paths.read_feature_snapshots.glob("ship_month=*/*.parquet")):
@@ -1003,15 +955,11 @@ def build_duckdb_catalog(
 
         if paths.read_decomp_by_day_path.exists():
             con.execute(
-                f"CREATE OR REPLACE VIEW decomp_by_day AS "
-                f"SELECT * FROM read_parquet('{paths.read_decomp_by_day_path}')"
+                f"CREATE OR REPLACE VIEW decomp_by_day AS SELECT * FROM read_parquet('{paths.read_decomp_by_day_path}')"
             )
         hl_decomp = paths.read_mart / "decomp_by_day_hyperlocal.parquet"
         if hl_decomp.exists():
-            con.execute(
-                f"CREATE OR REPLACE VIEW decomp_by_day_hyperlocal AS "
-                f"SELECT * FROM read_parquet('{hl_decomp}')"
-            )
+            con.execute(f"CREATE OR REPLACE VIEW decomp_by_day_hyperlocal AS SELECT * FROM read_parquet('{hl_decomp}')")
 
         _build_feature_impact, impact_paths, _read_feature_impact = _require_impact()
         impact = impact_paths(paths.read_mart)
@@ -1028,10 +976,7 @@ def build_duckdb_catalog(
         }
         for view_name, parquet_path in impact_view_map.items():
             if parquet_path.exists():
-                con.execute(
-                    f"CREATE OR REPLACE VIEW {view_name} AS "
-                    f"SELECT * FROM read_parquet('{parquet_path}')"
-                )
+                con.execute(f"CREATE OR REPLACE VIEW {view_name} AS SELECT * FROM read_parquet('{parquet_path}')")
         step_contrib_glob = str(impact["step_contrib"] / "ship_month=*" / "*.parquet")
         if any(impact["step_contrib"].glob("ship_month=*/*.parquet")):
             con.execute(
@@ -1050,10 +995,7 @@ def build_duckdb_catalog(
         }
         for view_name, parquet_path in funnel_view_map.items():
             if parquet_path.exists():
-                con.execute(
-                    f"CREATE OR REPLACE VIEW {view_name} AS "
-                    f"SELECT * FROM read_parquet('{parquet_path}')"
-                )
+                con.execute(f"CREATE OR REPLACE VIEW {view_name} AS SELECT * FROM read_parquet('{parquet_path}')")
     finally:
         con.close()
     if paths.using_mirror:
@@ -1090,14 +1032,11 @@ class EtpLake:
     def scan_snapshots(self) -> pl.LazyFrame:
         glob = list(self.paths.read_snapshots.glob("ship_month=*/*.parquet"))
         if glob:
-            return pl.scan_parquet(
-                str(self.paths.read_snapshots / "ship_month=*" / "*.parquet")
-            )
+            return pl.scan_parquet(str(self.paths.read_snapshots / "ship_month=*" / "*.parquet"))
         if self.paths.history_cache.exists():
             return pl.scan_parquet(self.paths.history_cache)
         raise FileNotFoundError(
-            f"No snapshots under {self.paths.read_snapshots} and no cache at "
-            f"{self.paths.history_cache}"
+            f"No snapshots under {self.paths.read_snapshots} and no cache at {self.paths.history_cache}"
         )
 
     def history(
@@ -1109,17 +1048,9 @@ class EtpLake:
     ) -> pl.DataFrame:
         lf = self.scan_snapshots()
         if ship_month is not None:
-            month_glob = list(
-                self.paths.read_snapshots.glob(f"ship_month={ship_month}/*.parquet")
-            )
+            month_glob = list(self.paths.read_snapshots.glob(f"ship_month={ship_month}/*.parquet"))
             if month_glob:
-                lf = pl.scan_parquet(
-                    str(
-                        self.paths.read_snapshots
-                        / f"ship_month={ship_month}"
-                        / "*.parquet"
-                    )
-                )
+                lf = pl.scan_parquet(str(self.paths.read_snapshots / f"ship_month={ship_month}" / "*.parquet"))
             elif "ship_month" in lf.collect_schema().names():
                 lf = lf.filter(pl.col("ship_month") == ship_month)
         if loadnumber is not None:
@@ -1133,11 +1064,7 @@ class EtpLake:
         out: dict[str, Any] = {ID_COL: loadnumber}
         features_path = self.paths.data_dir / "features.parquet"
         if features_path.exists():
-            feat = (
-                pl.scan_parquet(features_path)
-                .filter(pl.col(ID_COL) == loadnumber)
-                .collect()
-            )
+            feat = pl.scan_parquet(features_path).filter(pl.col(ID_COL) == loadnumber).collect()
             if feat.height:
                 out["features"] = feat.row(0, named=True)
         hist = self.history(loadnumber=loadnumber)
@@ -1151,11 +1078,7 @@ class EtpLake:
                 out["latest_audit"] = audit.row(-1, named=True)
                 out["n_audit_snaps"] = audit.height
             out["history"] = hist
-        per = (
-            self.paths.per_load_lake
-            if self.paths.per_load_lake.exists()
-            else self.paths.per_load_cache
-        )
+        per = self.paths.per_load_lake if self.paths.per_load_lake.exists() else self.paths.per_load_cache
         if per.exists():
             ep = pl.scan_parquet(per).filter(pl.col(ID_COL) == loadnumber).collect()
             if ep.height:
@@ -1182,19 +1105,9 @@ class EtpLake:
         """Raw prediction+input path — no analytics anchor baked in."""
         lf = self.scan_feature_snapshots()
         if ship_month is not None:
-            month_glob = list(
-                self.paths.read_feature_snapshots.glob(
-                    f"ship_month={ship_month}/*.parquet"
-                )
-            )
+            month_glob = list(self.paths.read_feature_snapshots.glob(f"ship_month={ship_month}/*.parquet"))
             if month_glob:
-                lf = pl.scan_parquet(
-                    str(
-                        self.paths.read_feature_snapshots
-                        / f"ship_month={ship_month}"
-                        / "*.parquet"
-                    )
-                )
+                lf = pl.scan_parquet(str(self.paths.read_feature_snapshots / f"ship_month={ship_month}" / "*.parquet"))
             elif "ship_month" in lf.collect_schema().names():
                 lf = lf.filter(pl.col("ship_month") == ship_month)
         if loadnumber is not None:
@@ -1219,8 +1132,7 @@ class EtpLake:
         """
         if loadnumber is None and ship_month is None:
             raise ValueError(
-                "decompose requires loadnumber and/or ship_month "
-                "(refusing to collect full mart into memory)"
+                "decompose requires loadnumber and/or ship_month (refusing to collect full mart into memory)"
             )
         snaps = self.feature_history(loadnumber=loadnumber, ship_month=ship_month)
         catalog = load_feature_catalog(self.paths.feature_catalog_path)
@@ -1257,8 +1169,7 @@ class EtpLake:
         """
         if loadnumber is None and ship_month is None:
             raise ValueError(
-                "feature_impact requires loadnumber and/or ship_month "
-                "(refusing to collect full mart into memory)"
+                "feature_impact requires loadnumber and/or ship_month (refusing to collect full mart into memory)"
             )
         if by not in ("prebook_day", "lead_day"):
             raise ValueError(f"by must be 'prebook_day' or 'lead_day', got {by!r}")
@@ -1267,10 +1178,7 @@ class EtpLake:
         if build or force:
             build_feature_impact, _, _ = _require_impact()
             if not self.paths.feature_deltas.exists():
-                raise FileNotFoundError(
-                    f"missing feature_deltas: {self.paths.feature_deltas} "
-                    "(run mart stage first)"
-                )
+                raise FileNotFoundError(f"missing feature_deltas: {self.paths.feature_deltas} (run mart stage first)")
             build_summary = build_feature_impact(
                 self.paths.mart,
                 feature_deltas_dir=self.paths.feature_deltas,
@@ -1330,9 +1238,7 @@ class EtpLake:
         """Lifecycle data only (no plot) — model, audit, checkpoints, MDE."""
         from dqt.etp_timeline import build_load_timeline
 
-        return build_load_timeline(
-            self, loadnumber, mde_cache=mde_cache, query_mde=query_mde
-        )
+        return build_load_timeline(self, loadnumber, mde_cache=mde_cache, query_mde=query_mde)
 
     def funnel(
         self,
@@ -1362,20 +1268,13 @@ class EtpLake:
         if build or force:
             if not any(self.paths.feature_snapshots.glob("ship_month=*/*.parquet")):
                 raise FileNotFoundError(
-                    f"missing feature_snapshots: {self.paths.feature_snapshots} "
-                    "(run mart stage first)"
+                    f"missing feature_snapshots: {self.paths.feature_snapshots} (run mart stage first)"
                 )
-            per_load = (
-                self.paths.per_load_lake
-                if self.paths.per_load_lake.exists()
-                else self.paths.per_load_cache
-            )
+            per_load = self.paths.per_load_lake if self.paths.per_load_lake.exists() else self.paths.per_load_cache
             build_summary = build_funnel_attrs(
                 self.paths.mart,
                 feature_snapshots_dir=self.paths.feature_snapshots,
-                feature_deltas_dir=self.paths.feature_deltas
-                if self.paths.feature_deltas.exists()
-                else None,
+                feature_deltas_dir=self.paths.feature_deltas if self.paths.feature_deltas.exists() else None,
                 per_load_path=per_load if per_load.exists() else None,
                 stages_path=funnel_paths(self.paths.mart)["stages_cache"],
                 force=force,
@@ -1409,9 +1308,7 @@ def run_impact_stage(
     """Build Layer B/C feature-impact tables from mart deltas."""
     build_feature_impact, _, _ = _require_impact()
     if not paths.feature_deltas.exists():
-        raise FileNotFoundError(
-            f"missing feature_deltas: {paths.feature_deltas} (run mart stage first)"
-        )
+        raise FileNotFoundError(f"missing feature_deltas: {paths.feature_deltas} (run mart stage first)")
     return build_feature_impact(
         paths.mart,
         feature_deltas_dir=paths.feature_deltas,
@@ -1436,12 +1333,8 @@ def run_funnel_stage(
     """Build funnel load attrs + rollups from mart partitions."""
     build_funnel_attrs, funnel_paths, _read_funnel = _require_funnel()
     if not any(paths.feature_snapshots.glob("ship_month=*/*.parquet")):
-        raise FileNotFoundError(
-            f"missing feature_snapshots: {paths.feature_snapshots} (run mart stage first)"
-        )
-    per_load = (
-        paths.per_load_lake if paths.per_load_lake.exists() else paths.per_load_cache
-    )
+        raise FileNotFoundError(f"missing feature_snapshots: {paths.feature_snapshots} (run mart stage first)")
+    per_load = paths.per_load_lake if paths.per_load_lake.exists() else paths.per_load_cache
     return build_funnel_attrs(
         paths.mart,
         feature_snapshots_dir=paths.feature_snapshots,

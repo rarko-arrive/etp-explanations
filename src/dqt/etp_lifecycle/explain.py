@@ -361,9 +361,7 @@ def build_material_change_ledger(
                 category = "QuantileRefresh"
                 confidence = "high"
                 evidence.append("delta_knn_50")
-                driver = (
-                    f"quantile refresh: ETP {float(detp):+,.0f}, knn_50 {float(dknn):+,.0f}"
-                )
+                driver = f"quantile refresh: ETP {float(detp):+,.0f}, knn_50 {float(dknn):+,.0f}"
             rows.append(
                 _ledger_row(
                     ts=row.get("snapshot_utc_t1"),
@@ -492,9 +490,7 @@ def build_material_change_ledger(
                     )
 
     if not display.is_empty() and display.height >= 2:
-        ordered = display.filter(pl.col("target3").is_not_null()).sort(
-            "hours_before_pickup", descending=True
-        )
+        ordered = display.filter(pl.col("target3").is_not_null()).sort("hours_before_pickup", descending=True)
         if ordered.height >= 2:
             prev_rows = ordered.to_dicts()
             for prev, cur in pairwise(prev_rows):
@@ -569,15 +565,11 @@ def attribution_card(ledger: pl.DataFrame, *, top_n: int = 5) -> list[dict[str, 
     if ledger.is_empty():
         return []
     pricing = ledger.filter(
-        (pl.col("is_pricing_driver") == True)
-        & (pl.col("metric") == "etp50")
-        & pl.col("delta_usd").is_not_null()
+        pl.col("is_pricing_driver") & (pl.col("metric") == "etp50") & pl.col("delta_usd").is_not_null()
     )
     if pricing.is_empty():
-        pricing = ledger.filter(pl.col("is_pricing_driver") == True)
-    ranked = pricing.with_columns(pl.col("delta_usd").abs().alias("_abs")).sort(
-        "_abs", descending=True
-    )
+        pricing = ledger.filter(pl.col("is_pricing_driver"))
+    ranked = pricing.with_columns(pl.col("delta_usd").abs().alias("_abs")).sort("_abs", descending=True)
     out: list[dict[str, Any]] = []
     for row in ranked.head(top_n).iter_rows(named=True):
         out.append(
@@ -606,15 +598,13 @@ def summarize_load(
 
     category_counts: dict[str, int] = {}
     if not ledger.is_empty() and "category" in ledger.columns:
-        pricing = ledger.filter(pl.col("is_pricing_driver") == True)
+        pricing = ledger.filter(pl.col("is_pricing_driver"))
         for cat in pricing["category"].unique().to_list():
             category_counts[str(cat)] = int(pricing.filter(pl.col("category") == cat).height)
 
     lines: list[str] = []
     if sm.get("shift_amt") is not None and sm.get("shift_pct") is not None:
-        lines.append(
-            f"Model ETP50 avail→48hr: ${sm['shift_amt']:+,.0f} ({sm['shift_pct'] * 100:+.1f}%)"
-        )
+        lines.append(f"Model ETP50 avail→48hr: ${sm['shift_amt']:+,.0f} ({sm['shift_pct'] * 100:+.1f}%)")
     if sm.get("t1_gap_mean") is not None:
         lines.append(f"T1 display avg {sm['t1_gap_mean']:+,.0f} vs model")
 
@@ -756,9 +746,7 @@ def format_pricing_accuracy(pricing: dict[str, Any] | None) -> list[str]:
             continue
         att_s = f"{att * 100:.0f}%" if att is not None else "n/a"
         gap_s = f"{gap:+.0f}pp" if gap is not None else "n/a"
-        lines.append(
-            f"  ETP p50 @ {label}: ${quote:,.0f} → MAE ${mae:,.0f} (att {att_s}, gap {gap_s})"
-        )
+        lines.append(f"  ETP p50 @ {label}: ${quote:,.0f} → MAE ${mae:,.0f} (att {att_s}, gap {gap_s})")
     return lines
 
 

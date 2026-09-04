@@ -71,11 +71,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     html = render_explanation_for_load(loadnumber, opts)
 
-    out_path = (
-        Path(args.out)
-        if args.out
-        else write_cached_html(loadnumber, html)
-    )
+    out_path = Path(args.out) if args.out else write_cached_html(loadnumber, html)
     if args.out:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(html)

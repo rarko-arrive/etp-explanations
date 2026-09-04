@@ -16,7 +16,7 @@ endif
 export DQT_DATA_DIR := $(DQT_DATA)
 
 .DEFAULT_GOAL := help
-.PHONY: help install lint test explain explain-ui explain-serve
+.PHONY: help install lint test pre-commit pre-commit-install explain explain-ui explain-serve
 
 # Support: make explain LOAD=9199475  OR  make explain 9199475
 ifneq ($(filter explain explain-ui,$(MAKECMDGOALS)),)
@@ -29,11 +29,21 @@ endif
 help: ## list targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-install: ## uv venv + Jupyter kernel
+install: ## uv venv + Jupyter kernel + pre-commit hooks
 	bash scripts/install.sh
 
-lint: ## ruff
-	uv run ruff check src/ scripts/ app/ --fix
+pre-commit-install: ## install git pre-commit hook
+	uv run pre-commit install
+
+pre-commit: ## run all pre-commit hooks on entire repo
+	uv run pre-commit run --all-files
+
+lint: ## ruff (check + fix); mirrors pre-commit ruff hooks
+	uv run ruff check src/ scripts/ app/ tests/ --fix --unsafe-fixes
+	uv run ruff format src/ scripts/ app/ tests/
+
+sql-lint: ## sqlfluff on SQL/
+	uv run sqlfluff lint SQL/
 
 test: ## pytest
 	uv run pytest tests/ -q

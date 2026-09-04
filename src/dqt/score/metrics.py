@@ -52,9 +52,7 @@ def pinball_usd(predicted_q: np.ndarray, actual: np.ndarray, level: float) -> fl
     return float(np.mean(np.where(diff >= 0, level * diff, (level - 1) * diff)))
 
 
-def score_levels(
-    levels: np.ndarray, predicted: np.ndarray, actual: np.ndarray, *, model: str
-) -> pl.DataFrame:
+def score_levels(levels: np.ndarray, predicted: np.ndarray, actual: np.ndarray, *, model: str) -> pl.DataFrame:
     """One row per quantile level for one model.
 
     `predicted` is (n_loads, n_levels); `actual` is (n_loads,); `levels` is

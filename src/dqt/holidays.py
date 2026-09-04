@@ -135,10 +135,7 @@ def tag_holiday_windows(
     probe = tagged.select([*join_keys, "_event_date"])
     hits = (
         probe.join(occ, how="cross")
-        .filter(
-            (pl.col("_event_date") >= pl.col("window_start"))
-            & (pl.col("_event_date") <= pl.col("window_end"))
-        )
+        .filter((pl.col("_event_date") >= pl.col("window_start")) & (pl.col("_event_date") <= pl.col("window_end")))
         .sort([*join_keys, "observed_date"])
         .group_by(join_keys)
         .agg(
