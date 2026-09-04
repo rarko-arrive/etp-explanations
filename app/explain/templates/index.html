@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ETP Lifecycle Explainer</title>
+<style>
+:root{
+  --ink:#1a2332; --paper:#f6f7f9; --card:#ffffff; --line:#e3e7ee;
+  --blue:#3b6fb5; --muted:#6b7686;
+  --mono:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:32px 20px 60px}
+.wrap{max-width:560px;margin:0 auto}
+header{border-bottom:3px solid var(--ink);padding-bottom:18px;margin-bottom:26px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:27px;font-weight:750;letter-spacing:-.01em;margin:4px 0 14px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin-bottom:22px}
+.note{font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+.search-row{display:flex;gap:10px;flex-wrap:wrap}
+input[type=number]{flex:1;min-width:180px;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px}
+button{font:inherit;padding:10px 16px;border:none;border-radius:8px;background:var(--ink);color:#fff;cursor:pointer;font-weight:600}
+button:hover{opacity:.92}
+footer{font-size:12px;color:var(--muted);font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">ETP lifecycle explainer</div>
+    <h1>Search by loadnumber</h1>
+  </header>
+  <section>
+    <p class="note">Enter a shipment loadnumber to view model vs display lifecycle, attribution, and pricing accuracy. Requires local etp-lake data (<code>$DQT_DATA_DIR</code>).</p>
+    <form id="searchForm" class="search-row">
+      <input id="loadInput" type="number" name="loadnumber" placeholder="6963033" autofocus required min="1" step="1">
+      <button type="submit">Explain load</button>
+    </form>
+  </section>
+  <footer>Cached exports: data/explain-shipments/</footer>
+</div>
+<script>
+document.getElementById('searchForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var load = document.getElementById('loadInput').value.trim();
+  if (load) window.location.href = '/explain/' + encodeURIComponent(load);
+});
+</script>
+</body>
+</html>

@@ -17,15 +17,14 @@ from loguru import logger
 
 load_dotenv(find_dotenv())
 
-from app.explain import (
-    DEFAULT_EXPLAIN_OUTPUT_DIR,
-    build_view_model,
-    render_explain_html,
+from app.explain import DEFAULT_EXPLAIN_OUTPUT_DIR
+from app.explain.service import (
+    ExplainOptions,
+    render_explanation_for_load,
+    write_cached_html,
 )
 from dqt import resolve_data_dir
-from dqt.etp_lake import EtpLake
-from dqt.etp_lifecycle import COHORT_HC, explain_load, resolve_load_id
-from dqt.etp_timeline import plot_etp_timeline
+from dqt.etp_lifecycle import COHORT_HC, resolve_load_id
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -50,7 +49,6 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     data_dir = resolve_data_dir(args.data_dir)
-    lake = EtpLake(data_dir)
     davis = Path(args.davis_cache) if args.davis_cache else None
     mde = Path(args.mde_cache) if args.mde_cache else None
 
@@ -63,37 +61,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     logger.info("rendering explainer for load {}", loadnumber)
 
-    result = explain_load(
-        lake,
-        loadnumber,
+    opts = ExplainOptions(
+        data_dir=data_dir,
         mde_cache=mde,
-        query_mde=args.query_mde,
         davis_cache=davis,
-        data_dir=data_dir,
-    )
-    timeline = plot_etp_timeline(
-        lake,
-        loadnumber,
-        show=False,
-        mde_cache=mde,
         query_mde=args.query_mde,
-        data_dir=data_dir,
-    )
-    view_model = build_view_model(
-        result,
-        timeline_figure=timeline["figure"],
         cohort=args.cohort,
         rank=None if args.load else args.rank,
     )
-    html = render_explain_html(view_model)
+    html = render_explanation_for_load(loadnumber, opts)
 
     out_path = (
         Path(args.out)
         if args.out
-        else DEFAULT_EXPLAIN_OUTPUT_DIR / f"explain-{loadnumber}.html"
+        else write_cached_html(loadnumber, html)
     )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(html)
+    if args.out:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(html)
+
     logger.info("wrote {}", out_path.resolve())
 
     if args.open:

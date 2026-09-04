@@ -22,6 +22,7 @@ packages = ["src/dqt", "scripts", "app"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "app/explain/templates/explain.html" = "app/explain/templates/explain.html"
+"app/explain/templates/index.html" = "app/explain/templates/index.html"
 
 [tool.uv.sources]
 arriveds = { git = "ssh://git@github.com/rarko-arrive/arrive-ds.git", rev = "v0.3.2" }
@@ -30,6 +31,9 @@ arriveds = { git = "ssh://git@github.com/rarko-arrive/arrive-ds.git", rev = "v0.
 dev = [
     "pytest>=9.1.1",
     "ruff>=0.16.2",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "httpx>=0.28.0",
 ]
 
 [tool.ruff.lint]

@@ -12,3 +12,4 @@ notebooks/dqt/
 Logs/
 *.DS_Store
 documentation/etp-slider/.dev/
+.ai/

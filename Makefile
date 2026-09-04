@@ -16,7 +16,7 @@ endif
 export DQT_DATA_DIR := $(DQT_DATA)
 
 .DEFAULT_GOAL := help
-.PHONY: help install lint test explain explain-ui
+.PHONY: help install lint test explain explain-ui explain-serve
 
 # Support: make explain LOAD=9199475  OR  make explain 9199475
 ifneq ($(filter explain explain-ui,$(MAKECMDGOALS)),)
@@ -47,6 +47,11 @@ explain-ui: ## static HTML explainer  [LOAD=6963033 | RANK=1 | make explain-ui 6
 	uv run python scripts/explain_ui.py \
 		$(if $(LOAD),--load $(LOAD),--rank $(or $(RANK),1)) \
 		--data-dir $(DQT_DATA_DIR) --open
+
+explain-serve: ## interactive explainer dashboard  [PORT=8765]
+	uv run python scripts/explain_serve.py \
+		--port $(or $(PORT),8765) \
+		--data-dir $(DQT_DATA_DIR)
 
 # Swallow bare loadnumbers passed as goals (see _explain_extra above).
 ifneq ($(_explain_extra),)
