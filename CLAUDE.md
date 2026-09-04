@@ -7,6 +7,7 @@ Shipment lifecycle material-change ledger. Requires etp-lake data on disk.
 ```bash
 make install && make test
 make explain LOAD=9199475
+make explain-ui LOAD=6963033   # → data/explain-shipments/explain-6963033.html
 # notebook: notebooks/etp-shipment-lifecyle.ipynb
 ```
 

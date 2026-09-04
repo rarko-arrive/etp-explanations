@@ -3,7 +3,7 @@
 Example
 -------
     uv run python scripts/explain_ui.py --load 6963033 --open
-    uv run python scripts/explain_ui.py --rank 2 --out out/explain.html
+    uv run python scripts/explain_ui.py --rank 2 --out data/explain-shipments/explain.html
 """
 
 from __future__ import annotations
@@ -17,7 +17,11 @@ from loguru import logger
 
 load_dotenv(find_dotenv())
 
-from app.explain import build_view_model, render_explain_html
+from app.explain import (
+    DEFAULT_EXPLAIN_OUTPUT_DIR,
+    build_view_model,
+    render_explain_html,
+)
 from dqt import resolve_data_dir
 from dqt.etp_lake import EtpLake
 from dqt.etp_lifecycle import COHORT_HC, explain_load, resolve_load_id
@@ -40,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--out",
         default=None,
-        help="output HTML path (default: out/explain-{loadnumber}.html)",
+        help=f"output HTML path (default: {DEFAULT_EXPLAIN_OUTPUT_DIR}/explain-{{loadnumber}}.html)",
     )
     parser.add_argument("--open", action="store_true", help="open HTML in default browser")
     args = parser.parse_args(argv)
@@ -83,7 +87,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     html = render_explain_html(view_model)
 
-    out_path = Path(args.out) if args.out else Path("out") / f"explain-{loadnumber}.html"
+    out_path = (
+        Path(args.out)
+        if args.out
+        else DEFAULT_EXPLAIN_OUTPUT_DIR / f"explain-{loadnumber}.html"
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)
     logger.info("wrote {}", out_path.resolve())
