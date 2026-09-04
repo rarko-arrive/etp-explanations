@@ -16,11 +16,11 @@ endif
 export DQT_DATA_DIR := $(DQT_DATA)
 
 .DEFAULT_GOAL := help
-.PHONY: help install lint test explain
+.PHONY: help install lint test explain explain-ui
 
 # Support: make explain LOAD=9199475  OR  make explain 9199475
-ifneq ($(filter explain,$(MAKECMDGOALS)),)
-  _explain_extra := $(filter-out explain,$(MAKECMDGOALS))
+ifneq ($(filter explain explain-ui,$(MAKECMDGOALS)),)
+  _explain_extra := $(filter-out explain explain-ui,$(MAKECMDGOALS))
   ifneq ($(_explain_extra),)
     LOAD := $(firstword $(_explain_extra))
   endif
@@ -33,7 +33,7 @@ install: ## uv venv + Jupyter kernel
 	bash scripts/install.sh
 
 lint: ## ruff
-	uv run ruff check src/ scripts/ --fix
+	uv run ruff check src/ scripts/ app/ --fix
 
 test: ## pytest
 	uv run pytest tests/ -q
@@ -42,6 +42,11 @@ explain: ## explain one load  [LOAD=9199475 | RANK=3 | make explain 9199475]
 	uv run python scripts/explain_etp_load.py \
 		$(if $(LOAD),--load $(LOAD),--rank $(or $(RANK),1)) \
 		--data-dir $(DQT_DATA_DIR)
+
+explain-ui: ## static HTML explainer  [LOAD=6963033 | RANK=1 | make explain-ui 6963033]
+	uv run python scripts/explain_ui.py \
+		$(if $(LOAD),--load $(LOAD),--rank $(or $(RANK),1)) \
+		--data-dir $(DQT_DATA_DIR) --open
 
 # Swallow bare loadnumbers passed as goals (see _explain_extra above).
 ifneq ($(_explain_extra),)

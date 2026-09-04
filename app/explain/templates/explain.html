@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ETP Lifecycle Explainer</title>
+<style>
+:root{
+  --ink:#1a2332; --paper:#f6f7f9; --card:#ffffff; --line:#e3e7ee;
+  --amber:#e8a33d; --blue:#3b6fb5; --teal:#3d8f83;
+  --up:#c05b3c; --muted:#6b7686;
+  --mono:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:32px 20px 60px}
+.wrap{max-width:1060px;margin:0 auto}
+header{border-bottom:3px solid var(--ink);padding-bottom:18px;margin-bottom:26px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:27px;font-weight:750;letter-spacing:-.01em;margin:4px 0 14px}
+.meta-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:8px}
+.load-id-copy{font-family:var(--mono);font-size:15px;font-weight:700;background:#eef1f6;border:1px solid var(--line);border-radius:6px;padding:3px 10px;cursor:pointer;color:var(--ink)}
+.load-id-copy:hover{background:#e3e7ee}
+.load-id-copy.copied{border-color:var(--teal);color:var(--teal);background:#edf7f5}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:10px;background:#eef1f6;color:var(--muted)}
+.pill-accent{background:#e8f0fa;color:var(--blue)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:22px 0 30px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.kpi .v{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1.2}
+.kpi .l{font-size:12px;color:var(--muted);margin-top:4px}
+.kpi.pos .v{color:var(--up)}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin-bottom:22px}
+h2{font-size:17px;font-weight:700;margin-bottom:2px}
+.note{font-size:13px;color:var(--muted);margin-bottom:14px}
+.callout{border-left:4px solid var(--amber);background:#fdf7ec;padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0;font-size:14px;line-height:1.5}
+.timeline-img{width:100%;max-width:100%;border:1px solid var(--line);border-radius:10px;display:block}
+.attribution{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.attribution li{border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:14px;line-height:1.45}
+.attribution .idx{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:4px}
+.attribution .cat{font-family:var(--mono);font-size:11px;color:var(--blue);margin-right:6px}
+.attribution .amt{font-family:var(--mono);font-weight:600;color:var(--up)}
+.attribution .when{font-size:12px;color:var(--muted);margin-top:4px}
+.tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tab{font-family:var(--mono);font-size:12px;padding:5px 12px;border:1px solid var(--line);border-radius:16px;background:none;cursor:pointer;color:var(--muted)}
+.tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tab-panel{display:none}
+.tab-panel.on{display:block}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:right;padding:7px 10px;border-bottom:2px solid var(--ink)}
+th:first-child,td:first-child{text-align:left}
+td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+td.pos{color:var(--up);font-weight:600}
+td.neg{color:var(--teal);font-weight:600}
+td.str{text-align:left}
+details{margin-top:12px;font-size:13px;color:var(--muted)}
+summary{cursor:pointer;font-weight:600;color:var(--ink)}
+pre{background:#eef1f6;border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;font-family:var(--mono);font-size:11px;line-height:1.4}
+.pricing-block{font-size:14px;line-height:1.6;color:var(--ink)}
+.pricing-block .line{margin-bottom:4px}
+footer{margin-top:30px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">ETP lifecycle explainer</div>
+    <h1 id="pageTitle">Load —</h1>
+    <div class="meta-row" id="metaRow"></div>
+  </header>
+
+  <div class="kpis" id="kpiStrip"></div>
+
+  <section>
+    <h2>Executive summary</h2>
+    <div class="callout" id="oneLiner"></div>
+  </section>
+
+  <section>
+    <h2>Timeline</h2>
+    <p class="note">Model ETP50 vs audit display targets · checkpoint inflections · covered carrier cost</p>
+    <img id="timelineImg" class="timeline-img" alt="ETP lifecycle timeline">
+  </section>
+
+  <section>
+    <h2>Attribution</h2>
+    <p class="note">Top pricing drivers ranked by material dollar impact</p>
+    <ol class="attribution" id="attributionCard"></ol>
+  </section>
+
+  <section id="pricingSection" style="display:none">
+    <h2>Pricing accuracy</h2>
+    <div class="pricing-block" id="pricingAccuracy"></div>
+  </section>
+
+  <section>
+    <h2>Material change ledger</h2>
+    <div class="tabs" id="ledgerTabs">
+      <button class="tab on" data-tab="pricing">Pricing drivers</button>
+      <button class="tab" data-tab="display">Display adjustments</button>
+      <button class="tab" data-tab="checkpoints">Checkpoints</button>
+    </div>
+    <div class="tab-panel on" id="tab-pricing"><div id="table-pricing"></div></div>
+    <div class="tab-panel" id="tab-display"><div id="table-display"></div></div>
+    <div class="tab-panel" id="tab-checkpoints"><div id="table-checkpoints"></div></div>
+  </section>
+
+  <section>
+    <h2>Lightning endpoint</h2>
+    <div id="lightningChips" class="kpis"></div>
+    <details>
+      <summary>Raw endpoint summary</summary>
+      <pre id="lightningRaw"></pre>
+    </details>
+  </section>
+
+  <footer id="footerMeta"></footer>
+</div>
+
+<script>
+window.__EXPLAIN__ = __DATA_JSON__;
+</script>
+<script>
+(function () {
+  const D = window.__EXPLAIN__;
+  const $ = (id) => document.getElementById(id);
+  const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  const fmtSigned = (n) => (n == null ? "—" : (n >= 0 ? "+" : "") + fmt.format(n).replace("$", "$"));
+
+  function pct(v) {
+    if (v == null) return "—";
+    return (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "%";
+  }
+
+  function kpi(label, value, cls) {
+    return `<div class="kpi${cls ? " " + cls : ""}"><div class="v">${value}</div><div class="l">${label}</div></div>`;
+  }
+
+  const meta = D.meta || {};
+  const summary = D.summary || {};
+  const shifts = summary.endpoint_shifts || {};
+  const mde = (summary.movement_flags || {}).mde || (D.payload && D.payload.summary && D.payload.summary.mde) || {};
+
+  $("pageTitle").textContent = "Load " + meta.loadnumber;
+  $("oneLiner").textContent = summary.one_liner || "";
+
+  const metaRow = $("metaRow");
+  const loadBtn = document.createElement("button");
+  loadBtn.className = "load-id-copy";
+  loadBtn.textContent = String(meta.loadnumber);
+  loadBtn.title = "Click to copy loadnumber";
+  loadBtn.onclick = () => {
+    navigator.clipboard.writeText(String(meta.loadnumber));
+    loadBtn.classList.add("copied");
+    loadBtn.textContent = "Copied!";
+    setTimeout(() => { loadBtn.classList.remove("copied"); loadBtn.textContent = String(meta.loadnumber); }, 1200);
+  };
+  metaRow.appendChild(loadBtn);
+  if (meta.primary_category) {
+    const p = document.createElement("span");
+    p.className = "pill pill-accent";
+    p.textContent = meta.primary_category;
+    metaRow.appendChild(p);
+  }
+  if (meta.path_archetype) {
+    const p = document.createElement("span");
+    p.className = "pill";
+    p.textContent = meta.path_archetype;
+    metaRow.appendChild(p);
+  }
+  if (meta.cohort) {
+    const p = document.createElement("span");
+    p.className = "pill";
+    p.textContent = meta.cohort + (meta.rank != null ? " rank " + meta.rank : "");
+    metaRow.appendChild(p);
+  }
+
+  const kpis = [];
+  if (shifts.shift_amt != null) {
+    kpis.push(kpi("ETP50 avail→48hr", fmtSigned(shifts.shift_amt) + " (" + pct(shifts.shift_pct) + ")", shifts.shift_amt > 0 ? "pos" : ""));
+  }
+  if (shifts.etp50_avail != null && shifts.etp50_48hr != null) {
+    kpis.push(kpi("ETP50 endpoints", fmt.format(shifts.etp50_avail) + " → " + fmt.format(shifts.etp50_48hr), ""));
+  }
+  const pa = D.pricing_accuracy;
+  if (pa && pa.covered && pa.realized_cost_usd != null) {
+    kpis.push(kpi("Realized cost", fmt.format(pa.realized_cost_usd), ""));
+  }
+  if (pa && pa.covered && pa.timings) {
+    pa.timings.forEach((t) => {
+      if (t.mae_usd != null) {
+        kpis.push(kpi("MAE @ " + (t.timing_label || t.timing), fmt.format(t.mae_usd), ""));
+      }
+    });
+  }
+  if (shifts.t1_gap_mean != null) {
+    kpis.push(kpi("T1 display avg gap", fmtSigned(shifts.t1_gap_mean) + " vs model", ""));
+  }
+  const lightning = D.lightning && D.lightning.endpoint_summary;
+  if (lightning && lightning.clhp_change_ind != null) {
+    kpis.push(kpi("Lightning change", lightning.clhp_change_ind ? "yes" : "no", ""));
+  }
+  $("kpiStrip").innerHTML = kpis.join("");
+
+  $("timelineImg").src = "data:image/png;base64," + D.timeline_png_b64;
+  $("timelineImg").alt = "Load " + meta.loadnumber + " ETP lifecycle timeline";
+
+  const card = summary.attribution_card || [];
+  $("attributionCard").innerHTML = card.map((row, i) => {
+    const amt = row.delta_usd != null ? `<span class="amt">${fmtSigned(row.delta_usd)}</span>` : "";
+    const when = row.hours_before_pickup != null ? `@ ${row.hours_before_pickup}h before pickup` : "";
+    return `<li><div class="idx">#${i + 1}</div><span class="cat">[${row.category}]</span>${row.driver_text || ""} ${amt}<div class="when">${when}</div></li>`;
+  }).join("") || "<li>No material pricing drivers flagged.</li>";
+
+  if (pa) {
+    $("pricingSection").style.display = "";
+    if (!pa.covered) {
+      $("pricingAccuracy").innerHTML = `<div class="line">Not covered (${pa.reason || "unknown"}).</div>`;
+    } else {
+      const lines = [];
+      lines.push(`<div class="line"><strong>Realized cost:</strong> ${fmt.format(pa.realized_cost_usd)}</div>`);
+      if (pa.booked_on_utc) lines.push(`<div class="line"><strong>Booked on:</strong> ${pa.booked_on_utc}</div>`);
+      (pa.timings || []).forEach((t) => {
+        const att = t.attainment != null ? (t.attainment * 100).toFixed(0) + "%" : "—";
+        const gap = t.gap_pp != null ? (t.gap_pp >= 0 ? "+" : "") + t.gap_pp.toFixed(0) + "pp" : "—";
+        lines.push(`<div class="line">ETP p50 @ ${t.timing_label}: ${fmt.format(t.mean_quote_usd)} → MAE ${fmt.format(t.mae_usd)} (att ${att}, gap ${gap})</div>`);
+      });
+      $("pricingAccuracy").innerHTML = lines.join("");
+    }
+  }
+
+  function renderTable(elId, columns, rows) {
+    const el = $(elId);
+    if (!rows || !rows.length) {
+      el.innerHTML = "<p class='note'>No rows.</p>";
+      return;
+    }
+    const ths = columns.map((c) => `<th>${c.label}</th>`).join("");
+    const trs = rows.map((row) => {
+      const tds = columns.map((c) => {
+        let v = row[c.key];
+        let cls = c.align === "left" ? "str" : "";
+        if (c.fmt === "usd" && v != null) { v = fmtSigned(v); cls += v.startsWith("+") ? " pos" : v.startsWith("-") ? " neg" : ""; }
+        else if (v == null) v = "—";
+        return `<td class="${cls.trim()}">${v}</td>`;
+      }).join("");
+      return `<tr>${tds}</tr>`;
+    }).join("");
+    el.innerHTML = `<table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+  }
+
+  const ledgerCols = [
+    { key: "hours_before_pickup", label: "HBP", align: "left" },
+    { key: "metric", label: "Metric", align: "left" },
+    { key: "delta_usd", label: "Δ USD", fmt: "usd" },
+    { key: "category", label: "Category", align: "left" },
+    { key: "confidence", label: "Conf", align: "left" },
+    { key: "driver_text", label: "Driver", align: "left" },
+  ];
+  const cpCols = [
+    { key: "mark_label", label: "Mark", align: "left" },
+    { key: "etp50", label: "ETP50", fmt: "usd" },
+    { key: "target1", label: "T1", fmt: "usd" },
+    { key: "target3", label: "T3", fmt: "usd" },
+    { key: "t1_gap", label: "T1 gap", fmt: "usd" },
+    { key: "delta_etp50_prev", label: "Δ ETP prev", fmt: "usd" },
+  ];
+
+  renderTable("table-pricing", ledgerCols, (D.ledger && D.ledger.pricing) || []);
+  renderTable("table-display", ledgerCols, (D.ledger && D.ledger.display) || []);
+  renderTable("table-checkpoints", cpCols, D.checkpoints || []);
+
+  document.querySelectorAll("#ledgerTabs .tab").forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll("#ledgerTabs .tab").forEach((b) => b.classList.remove("on"));
+      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("on"));
+      btn.classList.add("on");
+      $("tab-" + btn.dataset.tab).classList.add("on");
+    };
+  });
+
+  const lc = D.lightning && D.lightning.endpoint_summary;
+  if (lc) {
+    const chips = [];
+    if (lc.clhp_pred_tot_cost_delta != null) chips.push(kpi("CLHP Δ cost", fmtSigned(lc.clhp_pred_tot_cost_delta), ""));
+    if (lc.clhp_pred_tot_cost_rel_pct != null) chips.push(kpi("CLHP rel %", pct(lc.clhp_pred_tot_cost_rel_pct), ""));
+    if (lc.clhp_change_ind != null) chips.push(kpi("CLHP change ind", String(lc.clhp_change_ind), ""));
+    $("lightningChips").innerHTML = chips.join("");
+    $("lightningRaw").textContent = JSON.stringify(lc, null, 2);
+  } else {
+    $("lightningChips").innerHTML = "<p class='note'>No lightning endpoint data.</p>";
+    $("lightningRaw").textContent = "{}";
+  }
+
+  const pricingN = ((D.ledger && D.ledger.pricing) || []).length;
+  const displayN = ((D.ledger && D.ledger.display) || []).length;
+  $("footerMeta").textContent = `Generated ${meta.generated_at || ""} · Ledger: ${pricingN} pricing, ${displayN} display rows`;
+})();
+</script>
+</body>
+</html>
