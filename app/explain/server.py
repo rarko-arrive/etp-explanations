@@ -87,8 +87,16 @@ def run_server(
     port: int = 8765,
     default_opts: ExplainOptions | None = None,
     output_dir: Path | None = None,
+    proxy_headers: bool = False,
 ) -> None:
     import uvicorn
 
     application = create_app(default_opts=default_opts, output_dir=output_dir)
-    uvicorn.run(application, host=host, port=port, reload=False)
+    uvicorn.run(
+        application,
+        host=host,
+        port=port,
+        reload=False,
+        proxy_headers=proxy_headers,
+        forwarded_allow_ips="*" if proxy_headers else None,
+    )

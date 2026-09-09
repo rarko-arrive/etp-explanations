@@ -16,7 +16,7 @@ endif
 export DQT_DATA_DIR := $(DQT_DATA)
 
 .DEFAULT_GOAL := help
-.PHONY: help install lint test pre-commit pre-commit-install explain explain-ui explain-serve
+.PHONY: help install lint test pre-commit pre-commit-install explain explain-ui explain-serve docker-build docker-run
 
 # Support: make explain LOAD=9199475  OR  make explain 9199475
 ifneq ($(filter explain explain-ui,$(MAKECMDGOALS)),)
@@ -62,6 +62,12 @@ explain-serve: ## interactive explainer dashboard  [PORT=8765]
 	uv run python scripts/explain_serve.py \
 		--port $(or $(PORT),8765) \
 		--data-dir $(DQT_DATA_DIR)
+
+docker-build: ## production image  [IMAGE=etp-explainer:local]
+	bash scripts/docker_build.sh $(or $(IMAGE),etp-explainer:local)
+
+docker-run: ## run image locally  [DQT_DATA=../etp-dqt/data]
+	DQT_DATA=$(or $(DQT_DATA),data) docker compose up --build
 
 # Swallow bare loadnumbers passed as goals (see _explain_extra above).
 ifneq ($(_explain_extra),)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -14,6 +15,17 @@ from dqt.etp_lifecycle import explain_load
 from dqt.etp_timeline import plot_etp_timeline
 
 DEFAULT_EXPLAIN_OUTPUT_DIR = Path("data/explain-shipments")
+
+
+def resolve_explain_cache_dir(explicit: Path | str | None = None) -> Path | None:
+    """Resolve writable HTML cache directory for explain pages."""
+    if explicit is not None:
+        return Path(explicit)
+    raw = (os.environ.get("EXPLAIN_CACHE_DIR") or "").strip()
+    if raw:
+        return Path(os.path.expanduser(os.path.expandvars(raw)))
+    return None
+
 
 if TYPE_CHECKING:
     from dqt.etp_lake import EtpLake as EtpLakeType

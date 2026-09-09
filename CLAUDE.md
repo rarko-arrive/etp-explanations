@@ -9,6 +9,8 @@ make install && make test
 make explain LOAD=9199475
 make explain-ui LOAD=6963033   # → data/explain-shipments/explain-6963033.html
 make explain-serve             # http://127.0.0.1:8765
+make docker-build              # production image (needs GitHub SSH)
+make docker-run DQT_DATA=…     # local container smoke test
 make pre-commit                # run all git hooks on full repo
 # notebook: notebooks/etp-shipment-lifecyle.ipynb
 ```
@@ -26,3 +28,7 @@ make pre-commit                # run all git hooks on full repo
 ## VM sync
 
 Use `../etp-lake/scripts/sync_lake_to_vm.sh` from Mac; set `DQT_DATA_DIR` on VM to match.
+
+## Docker (Azure ML Custom Application)
+
+See `docker/README.md`. Build with `./scripts/docker_build.sh` (GitHub SSH for `arriveds`). Mount `$DQT_DATA_DIR` read-only at `/data`, lake mirror at `/mirror/etp_lake`, cache at `/cache`. Azure AD gates team access.
