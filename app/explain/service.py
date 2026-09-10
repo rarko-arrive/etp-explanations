@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from app.explain.exceptions import LoadNotFoundError
 from app.explain.render import render_explain_html
 from app.explain.view_model import build_view_model
 from dqt import resolve_data_dir
@@ -29,10 +30,6 @@ def resolve_explain_cache_dir(explicit: Path | str | None = None) -> Path | None
 
 if TYPE_CHECKING:
     from dqt.etp_lake import EtpLake as EtpLakeType
-
-
-class LoadNotFoundError(Exception):
-    """Raised when etp-lake has no history for the requested load."""
 
 
 @dataclass
@@ -99,7 +96,7 @@ def render_explanation_for_load(loadnumber: int, opts: ExplainOptions) -> str:
     except ValueError as exc:
         msg = str(exc)
         if "No ETP history" in msg or "Insufficient timeline data" in msg:
-            raise LoadNotFoundError(f"No ETP history for load {loadnumber}") from exc
+            raise LoadNotFoundError(loadnumber, f"No ETP history for load {loadnumber}") from exc
         raise
 
     view_model = build_view_model(
