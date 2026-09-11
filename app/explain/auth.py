@@ -1,51 +1,58 @@
-"""HTTP Basic Authentication for the ETP Explainer application."""
+"""HTTP Basic Authentication for the ETP Explainer application.
+
+Passwords in ``AUTH_PASSWORD`` may be either a bcrypt hash (``$2a$``/``$2b$``/``$2y$``)
+or a plaintext string for local development. Uses the ``bcrypt`` package directly;
+``passlib`` is avoided because 1.7.4 is incompatible with ``bcrypt>=4.1``.
+"""
 
 from __future__ import annotations
 
 import secrets
 from typing import Annotated
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from passlib.context import CryptContext
 
 from app.explain.config import ExplainSettings, get_settings
-
-# Password hashing context using bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # HTTP Basic auth security scheme
 security = HTTPBasic()
 
+_BCRYPT_PREFIXES = ("$2a$", "$2b$", "$2y$")
+_BCRYPT_MAX_BYTES = 72
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash.
+
+def is_bcrypt_hash(value: str) -> bool:
+    """Return True when ``value`` looks like a bcrypt hash."""
+    return value.startswith(_BCRYPT_PREFIXES)
+
+
+def verify_password(plain_password: str, stored: str) -> bool:
+    """Verify a password against a stored bcrypt hash or plaintext value.
 
     Args:
         plain_password: The plain text password to verify
-        hashed_password: The bcrypt hash to verify against
+        stored: A bcrypt hash, or a plaintext password (development only)
 
     Returns:
         True if the password matches, False otherwise
     """
-    # If the hash doesn't look like a bcrypt hash, do a simple comparison
-    # This allows using plain passwords in development
-    if not hashed_password.startswith("$2b$"):
-        return secrets.compare_digest(plain_password, hashed_password)
-
-    return pwd_context.verify(plain_password, hashed_password)
+    if not stored:
+        return False
+    if not is_bcrypt_hash(stored):
+        # Plaintext comparison (development only), constant-time.
+        return secrets.compare_digest(plain_password.encode("utf-8"), stored.encode("utf-8"))
+    try:
+        return bcrypt.checkpw(plain_password.encode("utf-8")[:_BCRYPT_MAX_BYTES], stored.encode("utf-8"))
+    except ValueError:
+        # Malformed hash in config — never let this surface as a 500.
+        return False
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt.
-
-    Args:
-        password: The plain text password to hash
-
-    Returns:
-        The bcrypt hash
-    """
-    return pwd_context.hash(password)
+    """Hash a password with bcrypt (cost 12). Returns the ``$2b$`` hash string."""
+    return bcrypt.hashpw(password.encode("utf-8")[:_BCRYPT_MAX_BYTES], bcrypt.gensalt(rounds=12)).decode("ascii")
 
 
 def verify_credentials(

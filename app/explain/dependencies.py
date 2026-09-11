@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
@@ -11,8 +10,10 @@ from fastapi import Depends
 from app.explain.config import ExplainSettings, get_settings
 from dqt.etp_lake import EtpLake
 
+# Global singleton for EtpLake (initialized on first access)
+_lake_instance: EtpLake | None = None
 
-@lru_cache(maxsize=1)
+
 def get_etp_lake(settings: Annotated[ExplainSettings, Depends(get_settings)]) -> EtpLake:
     """Get the ETP Lake instance (cached singleton).
 
@@ -22,7 +23,10 @@ def get_etp_lake(settings: Annotated[ExplainSettings, Depends(get_settings)]) ->
     Returns:
         Initialized EtpLake instance
     """
-    return EtpLake(settings.data_dir)
+    global _lake_instance
+    if _lake_instance is None:
+        _lake_instance = EtpLake(settings.data_dir)
+    return _lake_instance
 
 
 def get_cache_dir(settings: Annotated[ExplainSettings, Depends(get_settings)]) -> Path:
