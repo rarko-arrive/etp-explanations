@@ -9,6 +9,7 @@ dependencies = [
     "arriveds[azure]",
     "ipykernel>=7.3.0",
     "matplotlib>=3.8.0",
+    "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
     "tqdm>=4.70.0",
 ]
@@ -28,14 +29,19 @@ packages = ["src/dqt", "scripts", "app"]
 arriveds = { git = "ssh://git@github.com/rarko-arrive/arrive-ds.git", rev = "v0.3.2" }
 
 [dependency-groups]
+serve = [
+    "fastapi>=0.115.0",
+    "bcrypt>=4.1.0",
+    "python-multipart>=0.0.9",
+    "uvicorn[standard]>=0.32.0",
+]
 dev = [
     "pytest>=9.1.1",
     "ruff>=0.16.2",
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
     "httpx>=0.28.0",
     "pre-commit>=4.0.0",
     "sqlfluff>=3.4.0",
+    { include-group = "serve" },
 ]
 
 [tool.ruff]
