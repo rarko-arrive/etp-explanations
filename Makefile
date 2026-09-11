@@ -60,8 +60,7 @@ explain-ui: ## static HTML explainer  [LOAD=6963033 | RANK=1 | make explain-ui 6
 
 explain-serve: ## interactive explainer dashboard  [PORT=8765]
 	uv run python scripts/explain_serve.py \
-		--port $(or $(PORT),8765) \
-		--data-dir $(DQT_DATA_DIR)
+		--port $(or $(PORT),8765)
 
 docker-build: ## production image  [IMAGE=etp-explainer:local]
 	bash scripts/docker_build.sh $(or $(IMAGE),etp-explainer:local)
