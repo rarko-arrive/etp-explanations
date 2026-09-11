@@ -5,6 +5,7 @@ Production-ready application with authentication, logging, and error handling.
 
 from __future__ import annotations
 
+import sys
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -25,8 +26,9 @@ def create_app() -> FastAPI:
     # Load settings to validate configuration early
     settings = get_settings()
 
-    # Configure logging
-    logger.configure(handlers=[{"sink": "sys.stderr", "level": settings.log_level}])
+    # Configure logging. NB: the sink must be the stream object — passing the
+    # string "sys.stderr" makes loguru create a *file* named sys.stderr in CWD.
+    logger.configure(handlers=[{"sink": sys.stderr, "level": settings.log_level}])
 
     # Create FastAPI app
     app = FastAPI(
@@ -66,6 +68,12 @@ def create_app() -> FastAPI:
     logger.info("ETP Explainer application initialized")
     if not settings.auth_enabled:
         logger.warning("Authentication is DISABLED - for development only!")
+    elif not settings.auth_password:
+        logger.error(
+            "AUTH_ENABLED=1 but AUTH_PASSWORD is empty — every request will be rejected with 401. "
+            "Set AUTH_PASSWORD in .env (plaintext for dev, or a bcrypt hash: "
+            "uv run python -c \"from app.explain.auth import hash_password; print(hash_password('...'))\")."
+        )
 
     return app
 

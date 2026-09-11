@@ -13,3 +13,6 @@ Logs/
 *.DS_Store
 documentation/etp-slider/.dev/
 .ai/
+
+# share_explainer.sh runtime state (pids, logs)
+.run/

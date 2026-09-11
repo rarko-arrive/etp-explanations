@@ -16,7 +16,8 @@ endif
 export DQT_DATA_DIR := $(DQT_DATA)
 
 .DEFAULT_GOAL := help
-.PHONY: help install lint test pre-commit pre-commit-install explain explain-ui explain-serve docker-build docker-run
+.PHONY: help install lint sql-lint test pre-commit pre-commit-install explain explain-ui explain-serve \
+        share share-check share-status share-stop share-logs docker-build docker-run
 
 # Support: make explain LOAD=9199475  OR  make explain 9199475
 ifneq ($(filter explain explain-ui,$(MAKECMDGOALS)),)
@@ -62,6 +63,21 @@ explain-serve: ## interactive explainer dashboard  [PORT=8765]
 	uv run python scripts/explain_serve.py \
 		--port $(or $(PORT),8765) \
 		--data-dir $(DQT_DATA_DIR)
+
+share: ## server + cloudflare tunnel with basic auth; prints share URL  [PORT=8765]
+	bash scripts/share_explainer.sh start $(if $(PORT),--port $(PORT),)
+
+share-check: ## preflight for `make share` (env, data, auth, port, cloudflared)
+	bash scripts/share_explainer.sh check $(if $(PORT),--port $(PORT),)
+
+share-status: ## is the shared server/tunnel up? prints URL
+	bash scripts/share_explainer.sh status $(if $(PORT),--port $(PORT),)
+
+share-stop: ## stop shared server + tunnel
+	bash scripts/share_explainer.sh stop $(if $(PORT),--port $(PORT),)
+
+share-logs: ## tail shared server + tunnel logs
+	bash scripts/share_explainer.sh logs
 
 docker-build: ## production image  [IMAGE=etp-explainer:local]
 	bash scripts/docker_build.sh $(or $(IMAGE),etp-explainer:local)
