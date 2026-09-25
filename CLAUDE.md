@@ -88,7 +88,9 @@ Server settings and their env vars: `EXPLAIN_HOST`, `EXPLAIN_PORT`, `EXPLAIN_BEH
 | `etp_slider/` | Minimal movement / leadtime / MDE closures copied from etp-dqt for explain; not the full slider |
 | `etp_mart.py`, `score/`, `holidays.py`, `viz.py` | Supporting constants (`ID_COL`), metrics, plotting helpers |
 
-**Lake mirror:** `DQT_USE_LAKE_MIRROR=1` (+ optional `DQT_LAKE_MIRROR`, default `~/dqt/etp_lake`) makes `LakePaths` read parquet from a local-disk mirror while `duckdb_path` and writes stay on `DQT_DATA_DIR`. If the mirror dir is missing it logs a warning and falls back silently.
+**Lake mirror:** `DQT_USE_LAKE_MIRROR=1` (or `MIRROR_LAKE=1`; + optional `DQT_LAKE_MIRROR`, default `~/dqt/etp_lake`) makes `LakePaths` read parquet from a local-disk mirror while `duckdb_path` and writes stay on `DQT_DATA_DIR`. The mirror is only used if it has `.lake-ready` and non-empty `MIRROR_REQUIRED_PATHS` (`snapshots`, `mart/feature_snapshots`); otherwise it logs a warning and falls back to `DQT_DATA_DIR`.
+
+**lake.env (VM):** etp-lake's systemd timer (`make lake-sync`) publishes `~/.config/dqt/lake.env`; `scripts/explain_*.py` apply it after `.env` via `dqt.lake_env.load_lake_env()` (lake keys only; `DQT_LAKE_ENV=off` disables — tests set this). The explainer registers for hooks with `scripts/register_lake_consumer.sh` (`make lake-register`): `on_sync` → `manage-explainer.sh ensure`, `on_update` → `manage-explainer.sh lake-updated` (or the `share_explainer.sh` equivalents with `MODE=share`). `requires=` in that script must equal `MIRROR_REQUIRED_PATHS` (`tests/test_lake_env.py`). See DEPLOYMENT.md “Lake sync and auto-start”.
 
 ### Data requirements
 
@@ -105,7 +107,7 @@ Local dev shortcut: `ln -s ../etp-dqt/data data`, or set `DQT_DATA_DIR` to the e
 
 ## Testing notes
 
-- `tests/conftest.py:timeline_lake` builds a synthetic single-load lake (load `9394640`) in `tmp_path`; unit tests should use it rather than real data.
+- `tests/conftest.py:timeline_lake` builds a synthetic single-load lake (load `9394640`) in `tmp_path`; unit tests should use it rather than real data. It also sets `DQT_LAKE_ENV=off` so the VM's `~/.config/dqt/lake.env` cannot leak in.
 - Tests marked `@pytest.mark.integration` gate on `etp/etp-slider-history.parquet` existing under `DQT_DATA_DIR` and skip otherwise. The mark is not registered in `pyproject.toml`, so pytest emits `PytestUnknownMarkWarning`. When real data is present these tests take ~2 min.
 - Server tests use FastAPI `TestClient` against `create_app()` with `app.dependency_overrides` for `get_settings`, `get_etp_lake`, `get_cache_dir`; requests pass `auth=(user, pw)`. The `timeline_lake` fixture unsets `DQT_USE_LAKE_MIRROR`/`EXPLAIN_CACHE_DIR` so `.env` on the VM cannot leak into tests.
 
@@ -128,7 +130,7 @@ Three deployment paths exist; see the linked docs rather than duplicating them h
 
 - **Share from any machine** (`scripts/share_explainer.sh`, `make share*`): starts uvicorn on `127.0.0.1` plus a `cloudflared` quick tunnel, verifies auth locally and through the edge, prints the URL. Bash 3.2 compatible (macOS); all config from `.env`; `--port` is the only CLI override; refuses empty/`changeme` passwords. Runtime state in `.run/`.
 
-- **Bare-metal on the rarko1 VM** (`DEPLOYMENT.md`, `manage-explainer.sh {start|stop|restart|status|logs}`): uvicorn on `0.0.0.0:8765` behind nginx on port 80, logs to `/tmp/etp-explainer.log`, cache at `/mnt/dqt/etp-explainer-cache`, basic auth enabled. `manage-explainer.sh` stops the server with `pkill -f explain_serve`.
+- **Bare-metal on the VM** (`DEPLOYMENT.md`, `manage-explainer.sh {start|stop|restart|status|logs|ensure|lake-updated}`): uvicorn on `0.0.0.0:$EXPLAIN_PORT` behind nginx on port 80, logs to `/tmp/etp-explainer.log`, cache at `/mnt/dqt/etp-explainer-cache`, basic auth enabled. `manage-explainer.sh` only stops the server it started (pid file / port), never the `make share` one. Started and kept alive by etp-lake's lake-sync hooks; `make deploy-vm` resets the VM checkout to origin (stale-index safe), installs, registers, restarts.
 - **Docker / Azure ML Custom Application** (`docker/README.md`): non-root uid 1000, read-only rootfs, mounts `/data` (ro), `/mirror/etp_lake` (ro, optional), `/cache` (rw). Auth is expected to come from Azure AD in front, so `EXPLAIN_BEHIND_PROXY=1`.
 
 ## VM workflow

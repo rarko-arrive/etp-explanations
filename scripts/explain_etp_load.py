@@ -17,6 +17,10 @@ from loguru import logger
 
 load_dotenv(find_dotenv())
 
+from dqt.lake_env import load_lake_env
+
+load_lake_env()  # VM: lake paths from etp-lake's lake.env override .env
+
 import polars as pl
 
 from dqt import resolve_data_dir

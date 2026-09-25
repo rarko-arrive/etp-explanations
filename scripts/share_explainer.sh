@@ -10,12 +10,17 @@
 #   scripts/share_explainer.sh start --no-tunnel  # server only (LAN / VPN / nginx)
 #   scripts/share_explainer.sh start --port 8799  # override EXPLAIN_PORT
 #   scripts/share_explainer.sh status | url | logs [server|tunnel] | stop | restart
+#   scripts/share_explainer.sh ensure        # start whatever is down, keep what is up (lake-sync on_sync)
+#   scripts/share_explainer.sh lake-updated  # clear HTML cache, restart server only — tunnel/URL kept
 #   scripts/share_explainer.sh start --show-password   # echo AUTH_PASSWORD in summary
 #
 # Optional stable hostname (instead of a random *.trycloudflare.com URL):
 #   set SHARE_TUNNEL_TOKEN and SHARE_PUBLIC_URL in .env (Cloudflare Zero Trust
 #   → Networks → Tunnels → create tunnel → copy token; public hostname must
 #   route to http://127.0.0.1:<EXPLAIN_PORT>).
+#
+# On an Azure ML VM, lake paths (DQT_DATA_DIR, mirror) come from etp-lake's
+# ~/.config/dqt/lake.env when present (DQT_LAKE_ENV=off to ignore it).
 #
 # Runtime state lives in .run/ (gitignored): pids, logs, share.url.
 
@@ -83,6 +88,7 @@ load_env() {
     # shellcheck disable=SC1091
     . ./.env
     set +a
+    apply_lake_env
     DQT_DATA_DIR="$(bash scripts/expand_user_path.sh "${DQT_DATA_DIR:-data}")"
     [ -n "${UV_PROJECT_ENVIRONMENT:-}" ] && UV_PROJECT_ENVIRONMENT="$(bash scripts/expand_user_path.sh "$UV_PROJECT_ENVIRONMENT")"
     export DQT_DATA_DIR UV_PROJECT_ENVIRONMENT
@@ -95,6 +101,32 @@ load_env() {
     AUTH_PASSWORD="${AUTH_PASSWORD:-}"
     export EXPLAIN_HOST EXPLAIN_PORT AUTH_ENABLED AUTH_USERNAME AUTH_PASSWORD
     LOCAL_URL="http://127.0.0.1:$EXPLAIN_PORT"
+    CACHE_DIR="$(bash scripts/expand_user_path.sh "${EXPLAIN_CACHE_DIR:-data/explain-shipments}")"
+    case "$CACHE_DIR" in /*) ;; *) CACHE_DIR="$REPO_ROOT/$CACHE_DIR" ;; esac
+}
+
+# etp-lake's VM sync publishes lake paths in ~/.config/dqt/lake.env; they win over
+# .env (the server applies the same file via dqt.lake_env). DQT_LAKE_ENV=off disables.
+LAKE_ENV_FILE=""
+apply_lake_env() {
+    local f key val
+    case "$(printf '%s' "${DQT_LAKE_ENV:-}" | tr '[:upper:]' '[:lower:]')" in off|0|false|no|none) return 0 ;; esac
+    f="$(bash scripts/expand_user_path.sh "${DQT_LAKE_ENV:-$HOME/.config/dqt/lake.env}")"
+    [ -f "$f" ] || return 0
+    while IFS='=' read -r key val; do
+        case "$key" in
+            DQT_DATA_DIR|DQT_LAKE_MIRROR|DQT_USE_LAKE_MIRROR|MIRROR_LAKE|LAKE_VERSION|LAKE_STATUS) export "$key=$val" ;;
+        esac
+    done < "$f"
+    LAKE_ENV_FILE="$f"
+}
+
+ensure_cache_dir() {  # /mnt is wiped on VM stop/start and often recreated root-owned
+    mkdir -p "$CACHE_DIR" 2>/dev/null || sudo -n mkdir -p "$CACHE_DIR" 2>/dev/null || true
+    if [ ! -w "$CACHE_DIR" ]; then
+        sudo -n chown "$(id -un):$(id -gn)" "$CACHE_DIR" 2>/dev/null || true
+    fi
+    [ -w "$CACHE_DIR" ]
 }
 
 # ----------------------------------------------------------------------------
@@ -197,6 +229,17 @@ preflight() {
     fi
 
     # data
+    if [ -n "$LAKE_ENV_FILE" ]; then
+        info "lake paths from $LAKE_ENV_FILE (status ${LAKE_STATUS:-?}, mirror ${DQT_USE_LAKE_MIRROR:-0}, version ${LAKE_VERSION:-?})"
+        [ "${LAKE_STATUS:-}" = "ok" ] || warn "lake status ${LAKE_STATUS:-unknown} — reads go to the slow team SoT until etp-lake lake-sync finishes"
+    fi
+    if ensure_cache_dir; then
+        ok "cache dir $CACHE_DIR writable"
+    else
+        fail "cache dir $CACHE_DIR not writable — every render would fail on the cache write"
+        fix "sudo chown \$USER:\$USER $CACHE_DIR    # or set EXPLAIN_CACHE_DIR in .env"
+        errors=$((errors+1))
+    fi
     if [ -d "$DQT_DATA_DIR/etp_lake" ] && [ -f "$DQT_DATA_DIR/etp/etp-slider-history.parquet" ]; then
         ok "data dir $DQT_DATA_DIR (etp_lake/ + etp/etp-slider-history.parquet present)"
         [ -d "$DQT_DATA_DIR/etp_lake/mart/feature_deltas" ] || warn "etp_lake/mart/feature_deltas missing — material-change ledgers will be empty; rebuild the lake in etp-lake"
@@ -452,6 +495,49 @@ cmd_status() {
     if pid_alive "$spid"; then print_summary; fi
 }
 
+server_healthy() {
+    pid_alive "$(read_pid "$SERVER_PID_FILE")" && [ "$(http_code "$LOCAL_URL/health")" = "200" ]
+}
+
+tunnel_alive() {
+    pid_alive "$(read_pid "$TUNNEL_PID_FILE")" && [ -s "$URL_FILE" ]
+}
+
+# lake-sync on_sync hook: bring back whatever is down (reboot, crash) without
+# touching what is healthy — a live quick tunnel keeps its URL.
+cmd_ensure() {
+    local started=0
+    if server_healthy; then
+        ok "server healthy ($LOCAL_URL)"
+    else
+        stop_pid "server" "$SERVER_PID_FILE"
+        preflight; start_server; started=1
+    fi
+    if [ "$NO_TUNNEL" = 0 ]; then
+        if tunnel_alive; then
+            ok "tunnel up → $(cat "$URL_FILE")"
+        else
+            stop_pid "tunnel" "$TUNNEL_PID_FILE"; rm -f "$URL_FILE"
+            start_tunnel; started=1
+        fi
+    fi
+    [ "$started" = 1 ] && print_summary
+    return 0
+}
+
+# lake-sync on_update hook: cached pages were rendered from the old lake, and the
+# server resolves mirror-vs-SoT once at startup — clear + restart the server only.
+cmd_lake_updated() {
+    info "lake updated (version ${LAKE_VERSION:-?}, status ${LAKE_STATUS:-?}) — clearing $CACHE_DIR/explain-*.html"
+    rm -f "$CACHE_DIR"/explain-*.html
+    stop_pid "server" "$SERVER_PID_FILE"
+    preflight; start_server
+    if [ "$NO_TUNNEL" = 0 ] && ! tunnel_alive; then
+        start_tunnel
+    fi
+    print_summary
+}
+
 cmd_logs() {
     case "${1:-both}" in
         server) tail -n 50 -f "$SERVER_LOG" ;;
@@ -501,10 +587,14 @@ case "$CMD" in
         print_summary ;;
     status)
         load_env; cmd_status ;;
+    ensure)
+        load_env; cmd_ensure ;;
+    lake-updated)
+        load_env; cmd_lake_updated ;;
     url)
         [ -s "$URL_FILE" ] && cat "$URL_FILE" || { load_env; die "no tunnel URL recorded — is it running? (scripts/share_explainer.sh status)"; } ;;
     logs)
         cmd_logs "${LOG_WHICH:-both}" ;;
     *)
-        die "unknown command: $CMD (check|start|stop|restart|status|url|logs|help)" ;;
+        die "unknown command: $CMD (check|start|stop|restart|status|ensure|lake-updated|url|logs|help)" ;;
 esac

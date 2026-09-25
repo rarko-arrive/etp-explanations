@@ -17,6 +17,10 @@ from loguru import logger
 # Load .env file first
 load_dotenv(find_dotenv())
 
+from dqt.lake_env import load_lake_env
+
+load_lake_env()  # VM: lake paths from etp-lake's lake.env override .env
+
 from app.explain.config import get_settings
 from app.explain.server import run_server
 

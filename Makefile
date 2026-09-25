@@ -18,7 +18,7 @@ export DQT_DATA_DIR := $(DQT_DATA)
 .DEFAULT_GOAL := help
 .PHONY: help install lint sql-lint test pre-commit pre-commit-install explain explain-ui explain-serve \
         share share-check share-status share-stop share-logs docker-build docker-run \
-        deploy-vm deploy-vm-check deploy-vm-bootstrap
+        deploy-vm deploy-vm-check deploy-vm-bootstrap lake-register lake-unregister
 
 # Support: make explain LOAD=9199475  OR  make explain 9199475
 ifneq ($(filter explain explain-ui,$(MAKECMDGOALS)),)
@@ -79,12 +79,18 @@ share-stop: ## stop shared server + tunnel
 share-logs: ## tail shared server + tunnel logs
 	bash scripts/share_explainer.sh logs
 
+lake-register: ## VM: register with etp-lake lake-sync hooks  [MODE=serve|share] [PORT=]
+	bash scripts/register_lake_consumer.sh --mode $(or $(MODE),serve) $(if $(PORT),--port $(PORT),)
+
+lake-unregister: ## VM: stop receiving lake-sync hooks
+	bash scripts/register_lake_consumer.sh --unregister
+
 deploy-vm-check: ## SSH preflight on Azure VM  [VM_HOST=rarko2]
 	VM_HOST=$(or $(VM_HOST),$(HOST),rarko2) bash scripts/deploy_to_vm.sh check
 deploy-vm-bootstrap: ## first-time clone + dirs on VM  [VM_HOST=rarko2]
 	VM_HOST=$(or $(VM_HOST),$(HOST),rarko2) bash scripts/deploy_to_vm.sh bootstrap
-deploy-vm: ## git pull + make install + restart on VM  [VM_HOST=rarko2] [GIT_REF=main]
-	VM_HOST=$(or $(VM_HOST),$(HOST),rarko2) GIT_REF=$(GIT_REF) bash scripts/deploy_to_vm.sh deploy $(if $(SKIP_INSTALL),--skip-install,)
+deploy-vm: ## reset VM to origin + install + lake register + restart  [VM_HOST=rarko2] [GIT_REF=main] [SHARE=1] [FORCE=1]
+	VM_HOST=$(or $(VM_HOST),$(HOST),rarko2) GIT_REF=$(GIT_REF) SHARE=$(or $(SHARE),0) FORCE=$(or $(FORCE),0) bash scripts/deploy_to_vm.sh deploy $(if $(SKIP_INSTALL),--skip-install,)
 
 docker-build: ## production image  [IMAGE=etp-explainer:local]
 	bash scripts/docker_build.sh $(or $(IMAGE),etp-explainer:local)

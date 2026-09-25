@@ -112,15 +112,38 @@ def lake_root(data_dir: str | Path | None = None, *, root: Path | None = None) -
     return resolve_data_dir(data_dir, root=root) / LAKE_DIRNAME
 
 
-def resolve_lake_mirror(*, root: Path | None = None) -> Path | None:
-    """Return a local-disk lake mirror when ``DQT_USE_LAKE_MIRROR`` is enabled.
+#: Written last by etp-lake ``vm_mirror_lake.sh`` once a full/lite mirror completed.
+MIRROR_READY_MARKER = ".lake-ready"
 
-    Set ``DQT_USE_LAKE_MIRROR=1`` and optionally ``DQT_LAKE_MIRROR`` (default
-    ``~/dqt/etp_lake`` on local OS disk). The mirror must already exist (see
-    ``scripts/vm_mirror_lake.sh``). When unset or missing, returns ``None``.
+#: Lake-relative paths the explainer reads through ``read_*`` (history → snapshots,
+#: feature_history → mart/feature_snapshots). Keep in sync with
+#: ``scripts/register_lake_consumer.sh`` (``requires=``); a test enforces it.
+MIRROR_REQUIRED_PATHS = ("snapshots", "mart/feature_snapshots")
+
+
+def _mirror_problems(mirror: Path) -> list[str]:
+    problems = []
+    if not (mirror / MIRROR_READY_MARKER).is_file():
+        problems.append(f"no {MIRROR_READY_MARKER} marker (mirror incomplete or pre-lake-sync)")
+    for rel in MIRROR_REQUIRED_PATHS:
+        p = mirror / rel
+        if not p.is_dir() or not any(p.iterdir()):
+            problems.append(f"{rel}/ missing or empty")
+    return problems
+
+
+def resolve_lake_mirror(*, root: Path | None = None) -> Path | None:
+    """Return a local-disk lake mirror when enabled *and* complete.
+
+    Enable with ``DQT_USE_LAKE_MIRROR=1`` (or its synonym ``MIRROR_LAKE=1``) and
+    optionally ``DQT_LAKE_MIRROR`` (default ``~/dqt/etp_lake``). On the VM these
+    come from ``lake.env`` (see :mod:`dqt.lake_env`). The mirror is only used when
+    it carries the :data:`MIRROR_READY_MARKER` and every :data:`MIRROR_REQUIRED_PATHS`
+    entry is non-empty; otherwise this warns and returns ``None`` so reads fall
+    back to the project lake (slow but correct) instead of a partial copy.
     """
-    use = (os.environ.get("DQT_USE_LAKE_MIRROR") or "").strip().lower()
-    if use not in ("1", "true", "yes", "on"):
+    flags = (os.environ.get(k, "").strip().lower() for k in ("DQT_USE_LAKE_MIRROR", "MIRROR_LAKE"))
+    if not any(v in ("1", "true", "yes", "on") for v in flags):
         return None
     default_mirror = Path.home() / "dqt" / "etp_lake"
     raw = (os.environ.get("DQT_LAKE_MIRROR") or os.fspath(default_mirror)).strip()
@@ -133,6 +156,14 @@ def resolve_lake_mirror(*, root: Path | None = None) -> Path | None:
         logger.warning(
             "DQT_USE_LAKE_MIRROR set but mirror missing at {} — using project lake",
             p,
+        )
+        return None
+    problems = _mirror_problems(p)
+    if problems:
+        logger.warning(
+            "lake mirror {} not usable ({}) — using project lake; fix on the VM: etp-lake `make lake-sync`",
+            p,
+            "; ".join(problems),
         )
         return None
     return p
