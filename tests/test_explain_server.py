@@ -93,6 +93,8 @@ def test_explain_renders_html(explain_client: TestClient) -> None:
     assert resp.status_code == 200
     assert "9394640" in resp.text
     assert "data:image/png;base64," in resp.text
+    assert "Back to search" in resp.text
+    assert 'id="headerSearch"' in resp.text
 
 
 def test_explain_cache_hit(explain_client: TestClient, tmp_path: Path) -> None:

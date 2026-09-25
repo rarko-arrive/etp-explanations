@@ -17,7 +17,8 @@ export DQT_DATA_DIR := $(DQT_DATA)
 
 .DEFAULT_GOAL := help
 .PHONY: help install lint sql-lint test pre-commit pre-commit-install explain explain-ui explain-serve \
-        share share-check share-status share-stop share-logs docker-build docker-run
+        share share-check share-status share-stop share-logs docker-build docker-run \
+        deploy-vm deploy-vm-check deploy-vm-bootstrap
 
 # Support: make explain LOAD=9199475  OR  make explain 9199475
 ifneq ($(filter explain explain-ui,$(MAKECMDGOALS)),)
@@ -77,6 +78,13 @@ share-stop: ## stop shared server + tunnel
 
 share-logs: ## tail shared server + tunnel logs
 	bash scripts/share_explainer.sh logs
+
+deploy-vm-check: ## SSH preflight on Azure VM  [VM_HOST=rarko2]
+	VM_HOST=$(or $(VM_HOST),$(HOST),rarko2) bash scripts/deploy_to_vm.sh check
+deploy-vm-bootstrap: ## first-time clone + dirs on VM  [VM_HOST=rarko2]
+	VM_HOST=$(or $(VM_HOST),$(HOST),rarko2) bash scripts/deploy_to_vm.sh bootstrap
+deploy-vm: ## git pull + make install + restart on VM  [VM_HOST=rarko2] [GIT_REF=main]
+	VM_HOST=$(or $(VM_HOST),$(HOST),rarko2) GIT_REF=$(GIT_REF) bash scripts/deploy_to_vm.sh deploy $(if $(SKIP_INSTALL),--skip-install,)
 
 docker-build: ## production image  [IMAGE=etp-explainer:local]
 	bash scripts/docker_build.sh $(or $(IMAGE),etp-explainer:local)

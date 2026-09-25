@@ -15,6 +15,13 @@
 body{background:var(--paper);color:var(--ink);font:15px/1.55 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:32px 20px 60px}
 .wrap{max-width:1060px;margin:0 auto}
 header{border-bottom:3px solid var(--ink);padding-bottom:18px;margin-bottom:26px}
+.header-nav{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.back-link{font-size:14px;font-weight:600;color:var(--blue);text-decoration:none}
+.back-link:hover{text-decoration:underline}
+.header-search{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.header-search input[type=number]{width:9rem;font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:6px}
+.header-search button{font:inherit;font-size:13px;padding:6px 12px;border:none;border-radius:6px;background:var(--ink);color:#fff;cursor:pointer;font-weight:600}
+.header-search button:hover{opacity:.92}
 .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 h1{font-size:27px;font-weight:750;letter-spacing:-.01em;margin:4px 0 14px}
 .meta-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:8px}
@@ -62,6 +69,13 @@ footer{margin-top:30px;font-size:12px;color:var(--muted);font-family:var(--mono)
 <body>
 <div class="wrap">
   <header>
+    <div class="header-nav">
+      <a class="back-link" href="/">← Back to search</a>
+      <form id="headerSearch" class="header-search" aria-label="Search another load">
+        <input id="headerLoadInput" type="number" name="loadnumber" placeholder="Load #" min="1" step="1" aria-label="Loadnumber">
+        <button type="submit">Explain load</button>
+      </form>
+    </div>
     <div class="eyebrow">ETP lifecycle explainer</div>
     <h1 id="pageTitle">Load —</h1>
     <div class="meta-row" id="metaRow"></div>
@@ -294,6 +308,12 @@ window.__EXPLAIN__ = __DATA_JSON__;
   const displayN = ((D.ledger && D.ledger.display) || []).length;
   $("footerMeta").textContent = `Generated ${meta.generated_at || ""} · Ledger: ${pricingN} pricing, ${displayN} display rows`;
 })();
+
+document.getElementById("headerSearch").addEventListener("submit", function (e) {
+  e.preventDefault();
+  var load = document.getElementById("headerLoadInput").value.trim();
+  if (load) window.location.href = "/explain/" + encodeURIComponent(load);
+});
 </script>
 </body>
 </html>
