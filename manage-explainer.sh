@@ -24,8 +24,11 @@ load_app_env() {
         . ./.env
         set +a
     fi
-    if [[ "${UV_PROJECT_ENVIRONMENT:-}" == ~/* ]]; then
-        UV_PROJECT_ENVIRONMENT="${HOME}/${UV_PROJECT_ENVIRONMENT:2}"
+    # Expand a leading ~ only. (The old `== ~/*` test was itself tilde-expanded,
+    # so absolute paths matched and lost two characters → /home/azureuser/ome/….)
+    if [ -n "${UV_PROJECT_ENVIRONMENT:-}" ]; then
+        UV_PROJECT_ENVIRONMENT="$(bash scripts/expand_user_path.sh "$UV_PROJECT_ENVIRONMENT")"
+        export UV_PROJECT_ENVIRONMENT
     fi
     PORT="${EXPLAIN_PORT:-8765}"
     CACHE_DIR="$(bash scripts/expand_user_path.sh "${EXPLAIN_CACHE_DIR:-data/explain-shipments}")"
