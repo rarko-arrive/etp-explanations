@@ -63,6 +63,23 @@ Run `make test` after setup.
 
 **Notebook:** `notebooks/etp-shipment-lifecyle.ipynb`
 
+## Share a secure URL (basic auth + Cloudflare tunnel)
+
+Works from a MacBook or the Azure VM. Needs `cloudflared` (`brew install cloudflared`)
+and a real `AUTH_PASSWORD` in `.env` (see `.env.example` for the bcrypt one-liner).
+
+```bash
+make share-check          # preflight with remediation hints
+make share                # → prints https://<words>.trycloudflare.com + username
+make share-status | make share-stop
+scripts/share_explainer.sh start --no-tunnel   # server only (VPN / nginx)
+```
+
+The URL is HTTPS at the Cloudflare edge, tunnelled to `127.0.0.1:$EXPLAIN_PORT`; every
+page except `/health` requires the basic-auth credentials from `.env`. Quick-tunnel URLs
+change on each start; set `SHARE_TUNNEL_TOKEN`/`SHARE_PUBLIC_URL` for a stable hostname.
+See `DEPLOYMENT.md` for the VM/nginx deployment.
+
 ## Layout
 
 | Path | Purpose |

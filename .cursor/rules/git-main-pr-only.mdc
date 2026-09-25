@@ -1,0 +1,11 @@
+---
+description: Never push directly to main; use feature branches and PRs
+alwaysApply: true
+---
+
+# Git: main is PR-only
+
+- **Never** run `git push origin main` or force-push to `main`/`master`.
+- Ship changes via a feature branch (e.g. `v0`, `fix/...`) → push the branch → **`gh pr create`** (or user merges in GitHub UI).
+- Merging locally onto `main` is OK for the user's workflow; publishing is always **push branch + PR**, not push main.
+- Deploy from `main` only **after** the PR is merged on the remote (e.g. `GIT_REF=main make deploy-vm`).
