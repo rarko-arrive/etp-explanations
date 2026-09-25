@@ -54,8 +54,9 @@ def _history_rows() -> pl.DataFrame:
 def timeline_lake(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> EtpLake:
     # The synthetic lake must not be redirected to a real local-disk mirror
     # (DQT_USE_LAKE_MIRROR=1 in .env / direnv on the VM) or an external cache dir.
-    for var in ("DQT_USE_LAKE_MIRROR", "DQT_LAKE_MIRROR", "EXPLAIN_CACHE_DIR"):
+    for var in ("DQT_USE_LAKE_MIRROR", "MIRROR_LAKE", "DQT_LAKE_MIRROR", "EXPLAIN_CACHE_DIR"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("DQT_LAKE_ENV", "off")
     data = tmp_path / "data"
     cache = tmp_path / "etp"
     cache.mkdir(parents=True)

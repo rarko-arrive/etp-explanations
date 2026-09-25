@@ -1,21 +1,26 @@
 #!/usr/bin/env bash
-# One-time / repeat: Azure ML local disk for lake reads + explainer HTML cache.
+# One-time / repeat: explainer on an Azure ML VM next to etp-lake's lake sync.
 # Run ON the VM (or: ssh rarko2 'bash -s' < scripts/setup_vm_lake_env.sh)
 #
-#   ./scripts/setup_vm_lake_env.sh              # bootstrap /mnt/dqt + patch .env
-#   ./scripts/setup_vm_lake_env.sh --mirror     # also run etp-lake make mirror-lake LITE=1
+#   ./scripts/setup_vm_lake_env.sh              # /mnt/dqt + cache dir, server keys in .env, register consumer
+#   ./scripts/setup_vm_lake_env.sh --mirror     # also run one etp-lake `make lake-sync` now (background)
+#   ./scripts/setup_vm_lake_env.sh --mode share # register for share_explainer.sh (tunnel) instead of nginx
 #
-# Keeps DQT_DATA_DIR on cloudfiles (SoT: cohort, slider, catalog writes).
-# Parquet reads go to DQT_LAKE_MIRROR on /mnt; explainer cache on /mnt too.
+# Lake paths (DQT_DATA_DIR, DQT_LAKE_MIRROR, mirror on/off) are NOT written to
+# .env any more: etp-lake publishes them in ~/.config/dqt/lake.env after every
+# sync, and the explainer reads that file (src/dqt/lake_env.py). Install the
+# schedule once in etp-lake: `make lake-timer-install`.
 
 set -euo pipefail
 
 RUN_MIRROR=0
+MODE=serve
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --mirror) RUN_MIRROR=1 ;;
+        --mode) MODE="${2:?}"; shift ;;
         -h|--help)
-            sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *) echo "unknown: $1" >&2; exit 1 ;;
@@ -24,9 +29,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 EXPLAIN_REPO="${EXPLAIN_REPO:-$HOME/cloudfiles/code/Users/rarko/Projects/etp/etp-explanations}"
-LAKE_REPO="${LAKE_REPO:-$HOME/cloudfiles/code/Users/rarko/Projects/etp/etp-lake}"
-# Same tree as etp-lake .env (case may vary on Azure Files; prefer lowercase rarko)
-DATA_DIR="${DQT_DATA_DIR:-$HOME/cloudfiles/code/Users/rarko/Projects/etp/etp-lake/data}"
+# Pinned team clone (etp-lake AGENTS.md): its data/ is the team lake SoT.
+LAKE_REPO="${LAKE_REPO:-$HOME/cloudfiles/code/Users/rarko/main/etp-lake}"
 
 if [[ ! -d "$EXPLAIN_REPO" ]]; then
     echo "missing explainer repo: $EXPLAIN_REPO" >&2
@@ -79,9 +83,6 @@ def set_kv(key: str, value: str, lines: list[str]) -> list[str]:
     return out
 
 updates = {
-    "DQT_DATA_DIR": "${DATA_DIR}",
-    "DQT_USE_LAKE_MIRROR": "1",
-    "DQT_LAKE_MIRROR": "/mnt/dqt/etp_lake",
     "EXPLAIN_HOST": "0.0.0.0",
     "EXPLAIN_PORT": "8765",
     "EXPLAIN_BEHIND_PROXY": "1",
@@ -94,28 +95,26 @@ path.write_text("\n".join(lines) + "\n")
 print(f"→ updated {path}")
 PY
 
+"$EXPLAIN_REPO/scripts/register_lake_consumer.sh" --mode "$MODE"
+
 echo ""
 echo "Effective layout:"
-echo "  SoT (cohort, slider, catalog): ${DATA_DIR}"
-echo "  Fast parquet reads:            /mnt/dqt/etp_lake  (after mirror-lake)"
-echo "  Explainer HTML cache:          /mnt/dqt/etp-explainer-cache"
+echo "  Lake paths:            ~/.config/dqt/lake.env  (published by ${LAKE_REPO} make lake-sync)"
+echo "  Explainer HTML cache:  /mnt/dqt/etp-explainer-cache"
 echo ""
 
 if [[ "$RUN_MIRROR" != "1" ]]; then
-    echo "Next: populate mirror (once per wiped /mnt, ~10–60 min):"
-    echo "  cd ${LAKE_REPO} && make mirror-lake LITE=1"
-    echo "Or re-run: $0 --mirror"
+    echo "Next (once per VM): cd ${LAKE_REPO} && make lake-timer-install && ./scripts/install_lake_timer.sh run"
+    echo "Or run one sync now: $0 --mirror"
     exit 0
 fi
 
 if [[ ! -d "$LAKE_REPO" ]]; then
-    echo "skip mirror — no etp-lake at $LAKE_REPO" >&2
+    echo "skip sync — no etp-lake at $LAKE_REPO" >&2
     exit 1
 fi
 
-echo "→ vm_mirror_lake.sh --lite (background log: /tmp/etp-mirror-lake.log)"
+echo "→ etp-lake make lake-sync (background log: /tmp/etp-lake-sync.log)"
 cd "$LAKE_REPO"
-export DQT_DATA_DIR="${DATA_DIR}"
-export DQT_LAKE_MIRROR=/mnt/dqt/etp_lake
-nohup ./scripts/vm_mirror_lake.sh --lite >> /tmp/etp-mirror-lake.log 2>&1 &
-echo "  tail -f /tmp/etp-mirror-lake.log"
+nohup make lake-sync >> /tmp/etp-lake-sync.log 2>&1 &
+echo "  tail -f /tmp/etp-lake-sync.log"

@@ -84,13 +84,9 @@ cp .env.example .env
 # Edit .env with your settings (already done on rarko1)
 ```
 
-Key settings in `.env`:
+Key settings in `.env` (lake paths are **not** set here on the VM — see
+[Lake sync and auto-start](#lake-sync-and-auto-start-systemd-timer-in-etp-lake)):
 ```bash
-# Data paths
-DQT_DATA_DIR=~/cloudfiles/code/Users/rarko/Projects/etp/etp-lake/data
-DQT_USE_LAKE_MIRROR=1
-DQT_LAKE_MIRROR=/mnt/dqt/etp_lake
-
 # Server
 EXPLAIN_HOST=0.0.0.0
 EXPLAIN_PORT=8765
@@ -299,42 +295,45 @@ Reload nginx after changes:
 sudo systemctl reload nginx
 ```
 
-## Optional: Systemd Service (Auto-Start on Reboot)
+## Lake sync and auto-start (systemd timer in etp-lake)
 
-Create service file:
-```bash
-sudo tee /etc/systemd/system/etp-explainer.service > /dev/null <<'EOF'
-[Unit]
-Description=ETP Explainer Service
-After=network.target
+The explainer does not own a schedule. etp-lake runs **one** systemd timer per VM
+(`crontab` is blocked for `azureuser`) that mirrors the team lake to `/mnt`,
+publishes `~/.config/dqt/lake.env`, and calls back every registered app:
 
-[Service]
-Type=simple
-User=azureuser
-WorkingDirectory=/home/azureuser/cloudfiles/code/Users/RARKO/Projects/etp/etp-explanations
-Environment="PATH=/home/azureuser/uv-venvs/etp-explanations/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/home/azureuser/uv-venvs/etp-explanations/bin/python scripts/explain_serve.py
-Restart=always
-RestartSec=10
-StandardOutput=append:/tmp/etp-explainer.log
-StandardError=append:/tmp/etp-explainer.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
+```
+Mac make sync-lake → team SoT ~/cloudfiles/code/Users/rarko/main/etp-lake/data
+  └─ dqt-lake-sync.timer (boot + 30 min) → /mnt/dqt/etp_lake + .lake-ready
+       └─ ~/.config/dqt/lake.env → hooks in ~/.config/dqt/lake-consumers.d/etp-explanations.conf
+            on_sync   → ./manage-explainer.sh ensure        (start if down, e.g. after reboot)
+            on_update → ./manage-explainer.sh lake-updated  (clear HTML cache + restart)
 ```
 
-Enable and start:
+One-time on a VM:
+
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable etp-explainer
-sudo systemctl start etp-explainer
+# explainer: register (serve = nginx/manage-explainer.sh; share = share_explainer.sh + tunnel)
+cd ~/cloudfiles/code/Users/rarko/Projects/etp/etp-explanations
+make lake-register                    # or: make lake-register MODE=share [PORT=8799]
+
+# lake: install the timer from the persistent pinned clone, run it once
+cd ~/cloudfiles/code/Users/rarko/main/etp-lake
+make lake-timer-install
+./scripts/install_lake_timer.sh run
+make lake-timer-status
 ```
 
-Check status:
-```bash
-sudo systemctl status etp-explainer
-```
+What the explainer does with it:
+
+- `scripts/explain_*.py` call `dqt.lake_env.load_lake_env()` after `.env`, so `DQT_DATA_DIR`,
+  `DQT_LAKE_MIRROR` and the mirror flag come from `lake.env` (`DQT_LAKE_ENV=off` to opt out).
+- The mirror is only used when it has `.lake-ready` and non-empty `snapshots/` +
+  `mart/feature_snapshots/` (`MIRROR_REQUIRED_PATHS`); otherwise reads fall back to the team
+  SoT with a warning instead of 404-ing every load.
+- `manage-explainer.sh` and `share_explainer.sh` recreate a root-owned `/mnt` cache dir themselves.
+
+Do not add a separate `Restart=always` systemd unit for the server — the lake hooks
+restart it and would fight the unit.
 
 ## File Permissions Reference
 
@@ -360,20 +359,24 @@ chmod 755 ~/cloudfiles/code/Users/rarko/Projects/etp/etp-explanations/scripts/*.
 
 After making code changes:
 
+From the Mac (or any machine with `ssh rarko2`):
+
+```bash
+make deploy-vm VM_HOST=rarko2 GIT_REF=main          # nginx / manage-explainer.sh
+make deploy-vm VM_HOST=rarko2 GIT_REF=main SHARE=1  # share_explainer.sh (tunnel URL kept if up)
+```
+
+This resets the VM checkout to `origin/<ref>` (refusing if the VM has local edits or
+commits — `FORCE=1` discards them), runs `make install`, re-registers with the lake
+sync, and restarts. By hand on the VM, `git checkout` / `pull` on Azure Files can fail
+with `Entry '…' not uptodate` on files nobody touched (stale stat data); the fix is to
+rebuild the index, which is only a cache:
+
 ```bash
 cd ~/cloudfiles/code/Users/rarko/Projects/etp/etp-explanations
-
-# Pull latest changes
-git pull
-
-# Reinstall dependencies if needed
-make install
-
-# Restart the application
-./manage-explainer.sh restart
-
-# Verify it's working
-curl -s http://localhost:8765/health
+git fetch origin && git checkout main    # if this fails with "not uptodate":
+rm -f .git/index && git reset --hard origin/main
+make install && ./manage-explainer.sh restart
 ```
 
 ## Security Notes

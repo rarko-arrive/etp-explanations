@@ -11,6 +11,11 @@
 #   VM_HOST=rarko2 ./scripts/deploy_to_vm.sh deploy      # git pull + install + restart
 #   VM_HOST=rarko2 GIT_REF=main ./scripts/deploy_to_vm.sh deploy
 #   VM_HOST=rarko2 ./scripts/deploy_to_vm.sh deploy --skip-install
+#   VM_HOST=rarko2 SHARE=1 ./scripts/deploy_to_vm.sh deploy   # run via share_explainer.sh (tunnel) instead of nginx
+#
+# Deploy = reset the VM checkout to ${GIT_REMOTE}/${GIT_REF} (refuses if the VM has
+# local commits or edits — FORCE=1 to discard), make install, register with the
+# etp-lake lake sync (~/.config/dqt/lake-consumers.d/), restart.
 #
 # The VM must already have .env (paths, AUTH_PASSWORD, DQT_DATA_DIR). This script
 # never copies .env from the Mac — Mac and VM settings differ.
@@ -25,6 +30,8 @@ VM_REPO="${VM_REPO:-~/cloudfiles/code/Users/rarko/Projects/etp/etp-explanations}
 GIT_REMOTE="${GIT_REMOTE:-origin}"
 GIT_REF="${GIT_REF:-}"
 SKIP_INSTALL=0
+SHARE="${SHARE:-0}"
+FORCE="${FORCE:-0}"
 REPO_URL="${REPO_URL:-git@github.com:rarko-arrive/etp-explanations.git}"
 
 CMD="${1:-deploy}"
@@ -127,13 +134,44 @@ cmd_deploy() {
 
     remote "test -d $VM_REPO/.git" || die "repo not on VM — run bootstrap first"
 
-    remote "bash -lc 'cd $VM_REPO && git fetch $GIT_REMOTE && git checkout $ref && git pull --ff-only $GIT_REMOTE $ref'"
+    # Azure Files misreports stat data, so `git checkout` / `pull` fail with
+    # "not uptodate" on files nobody touched. Refresh the index; if it still
+    # disagrees, rebuild it (the index is only a cache) and reset.
+    remote "bash -s" <<EOF || die "git sync failed on VM (see above); FORCE=1 discards VM-local commits/edits"
+set -euo pipefail
+cd $VM_REPO
+git fetch -q $GIT_REMOTE $ref
+git update-index -q --refresh >/dev/null 2>&1 || true
+if [ "$FORCE" != 1 ]; then
+    if [ -n "\$(git status --porcelain --untracked-files=no)" ]; then
+        echo "VM checkout has uncommitted edits:"; git status --short --untracked-files=no | head -20; exit 1
+    fi
+    if git rev-parse -q --verify "refs/heads/$ref" >/dev/null && \
+       [ "\$(git rev-list --count $GIT_REMOTE/$ref..$ref)" != 0 ]; then
+        echo "VM branch $ref has commits not on $GIT_REMOTE/$ref:"; git log --oneline $GIT_REMOTE/$ref..$ref | head; exit 1
+    fi
+fi
+if ! git checkout -q -B $ref $GIT_REMOTE/$ref 2>/dev/null; then
+    echo "checkout hit stale index (Azure Files) — rebuilding index"
+    rm -f .git/index
+    git reset -q --hard
+    git checkout -q -B $ref $GIT_REMOTE/$ref
+fi
+git reset -q --hard $GIT_REMOTE/$ref
+echo "VM at \$(git rev-parse --short HEAD) (\$(git rev-parse --abbrev-ref HEAD))"
+EOF
     if [ "$SKIP_INSTALL" = 0 ]; then
         echo "→ make install (uv sync; VM needs GitHub SSH for arriveds)"
         remote "bash -lc 'cd $VM_REPO && make install'" || die "make install failed — on VM: eval \"\$(ssh-agent -s)\" && ssh-add, then retry"
     fi
-    echo "→ restart explainer"
-    remote "bash -lc 'cd $VM_REPO && ./manage-explainer.sh restart'"
+    if [ "$SHARE" = 1 ]; then
+        echo "→ register with lake sync (share mode) + restart via share_explainer.sh"
+        remote "bash -lc 'cd $VM_REPO && scripts/register_lake_consumer.sh --mode share && scripts/share_explainer.sh lake-updated'"
+        echo "→ deployed — share URL: $(remote "cat $VM_REPO/.run/share.url 2>/dev/null" || echo '?')"
+        return
+    fi
+    echo "→ register with lake sync (serve mode) + restart explainer"
+    remote "bash -lc 'cd $VM_REPO && scripts/register_lake_consumer.sh --mode serve && ./manage-explainer.sh restart'"
     for i in 1 2 3 4 5 6 7 8 9 10; do
         code="$(remote "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/health; exit 0" 2>/dev/null | tr -d '[:space:]')"
         [ "$code" = "200" ] && break
